@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev",
+    "dev": "nullshot dev",
     "start": "wrangler dev",
     "cf-typegen": "wrangler types",
-    "dev:nullshot": "nullshot dev",
+    "dev:wrangler": "wrangler dev",
     "postinstall": "nullshot install"
   },
   "dependencies": {

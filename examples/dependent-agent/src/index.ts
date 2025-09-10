@@ -91,7 +91,7 @@ export class DependentAgent extends AiSdkAgent<Env> {
       },
     );
 
-    return result.toTextStreamResponse();
+    return result.toUIMessageStreamResponse();
   }
 }
 

@@ -1,5 +1,0 @@
-name = "playground-showcase"
-compatibility_date = "2025-01-27"
-
-[env.production]
-pages_build_output_dir = "out" 
