@@ -1,13 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, X, RotateCcw } from "lucide-react";
+import { MessageCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgentSelector } from "@/components/agent-selector";
 import { cn } from "@/lib/utils";
 import { type Agent, DEFAULT_AGENT } from "@/lib/config";
 import { type UIMessage } from "ai";
+import { useAgentHealth } from "@/hooks/use-agent-health";
+import { showErrorToast, showSuccessToast, showInfoToast, NetworkError, TimeoutError, AgentOfflineError } from "@/lib/error-utils";
+import { 
+  saveOfflineMessage, 
+  getOfflineMessages, 
+  isOnline,
+  createOfflineResponseMessage,
+  createOfflineNotificationMessage
+} from "@/lib/offline-utils";
 
 // Type guard to check if a part has tool-related properties
 function isToolUIPart(
@@ -102,7 +111,11 @@ export function FloatingChat({
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-
+  const [isOffline, setIsOffline] = useState(false);
+  
+  // Monitor selected agent health
+  const { health: agentHealth, isLoading: isHealthLoading, error: healthError, checkHealth } = useAgentHealth(selectedAgent, 0);
+  
   // Random avatars
   const [userAvatar] = useState(
     () => `/avatars/${Math.floor(Math.random() * 19) + 1}.png`
@@ -110,14 +123,119 @@ export function FloatingChat({
   const [agentAvatar] = useState(
     () => `/avatars/${Math.floor(Math.random() * 19) + 1}.png`
   );
+  
+  // Handle online/offline status
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      showSuccessToast("You're back online!");
+      
+      // Try to send any offline messages
+      const offlineMessages = getOfflineMessages();
+      if (offlineMessages.length > 0) {
+        showInfoToast(`Found ${offlineMessages.length} saved messages. Attempting to send...`);
+      }
+    };
+    
+    const handleOffline = () => {
+      setIsOffline(true);
+      showInfoToast("You're offline", "Messages will be saved and sent when you're back online.");
+      
+      // Add offline notification to chat
+      setMessages(prev => [...prev, createOfflineNotificationMessage()]);
+    };
+    
+    // Set initial online status
+    setIsOffline(!isOnline());
+    
+    // Add event listeners
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const handleAgentChange = (agent: Agent) => {
     setSelectedAgent(agent);
     setMessages([]); // Clear messages when agent changes
   };
 
-  const sendMessage = async (messageText: string) => {
+  const sendMessage = useCallback(async (messageText: string) => {
     if (!messageText.trim()) return;
+
+    // Handle offline mode
+    if (isOffline || !isOnline()) {
+      // Save message for later sending
+      await saveOfflineMessage(selectedAgent, messageText.trim());
+      
+      // Add user message and offline response to chat
+      const userMessage: UIMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        parts: [{ type: "text", text: messageText.trim() }],
+      };
+      
+      setMessages(prev => [...prev, userMessage, createOfflineResponseMessage(messageText.trim())]);
+      setInput("");
+      return;
+    }
+
+    // Check if agent is online before sending message
+    try {
+      const updatedAgent = await checkHealth(true);
+      if (!updatedAgent.health?.isOnline) {
+        // Save message for later sending
+        await saveOfflineMessage(selectedAgent, messageText.trim());
+        
+        // Add user message and offline response to chat
+        const userMessage: UIMessage = {
+          id: crypto.randomUUID(),
+          role: "user",
+          parts: [{ type: "text", text: messageText.trim() }],
+        };
+        
+        const offlineResponse: UIMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          parts: [{
+            type: "text",
+            text: `The agent ${updatedAgent.name} is currently offline. Your message has been saved and will be sent when the agent is back online.`
+          }]
+        };
+        
+        setMessages(prev => [...prev, userMessage, offlineResponse]);
+        setInput("");
+        showErrorToast(new AgentOfflineError(`Agent ${updatedAgent.name} is offline: ${updatedAgent.health?.error || 'Unknown error'}`), "Agent Offline");
+        return;
+      }
+    } catch (err) {
+      // Save message for later sending
+      await saveOfflineMessage(selectedAgent, messageText.trim());
+      
+      // Add user message and offline response to chat
+      const userMessage: UIMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        parts: [{ type: "text", text: messageText.trim() }],
+      };
+      
+      const offlineResponse: UIMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        parts: [{
+          type: "text",
+          text: "There was an issue checking the agent status. Your message has been saved and will be sent when the connection is restored."
+        }]
+      };
+      
+      setMessages(prev => [...prev, userMessage, offlineResponse]);
+      setInput("");
+      showErrorToast(err, "Health Check Failed");
+      return;
+    }
 
     // Add user message immediately
     const userMessage: UIMessage = {
@@ -129,6 +247,7 @@ export function FloatingChat({
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
     setError(null);
+    setInput("");
 
     // Create assistant message ID upfront
     const assistantMessageId = crypto.randomUUID();
@@ -148,10 +267,18 @@ export function FloatingChat({
               msg.parts?.find((part) => part.type === "text")?.text || "",
           })),
         }),
+        signal: AbortSignal.timeout(30000), // 30 second timeout
       });
 
       if (!response.ok) {
-        throw new Error(`Agent request failed: ${response.status}`);
+        let errorMessage = `Agent request failed: ${response.status}`;
+        if (response.status === 404) {
+          errorMessage = "Agent endpoint not found. Please check the agent URL.";
+        } else if (response.status >= 500) {
+          errorMessage = "Agent server error. Please try again later.";
+        }
+        
+        throw new Error(errorMessage);
       }
 
       // Create assistant message
@@ -208,8 +335,25 @@ export function FloatingChat({
           }
         }
       }
+      
+      // Show success message for completed response
+      showSuccessToast("Message sent successfully");
     } catch (err) {
       console.error("Error sending message:", err);
+      
+      // Categorize and handle the error
+      if (err instanceof Error) {
+        if (err.name === "AbortError") {
+          showErrorToast(new TimeoutError("Request timed out after 30 seconds"), "Timeout");
+        } else if (err.message.includes("Failed to fetch")) {
+          showErrorToast(new NetworkError("Network connection failed"), "Network Error");
+        } else {
+          showErrorToast(err, "Error");
+        }
+      } else {
+        showErrorToast(new Error("Unknown error occurred"), "Error");
+      }
+      
       setError(err instanceof Error ? err : new Error("Unknown error"));
 
       // Remove the assistant message if there was an error
@@ -219,7 +363,7 @@ export function FloatingChat({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedAgent, messages, checkHealth, isOffline]);
 
   const handleFormSubmit = (
     message: PromptInputMessage,
@@ -398,21 +542,6 @@ export function FloatingChat({
 
             {/* Chat Input using AI Elements PromptInput */}
             <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-b-xl">
-              {error && (
-                <div className="mb-3 p-3 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center justify-between">
-                  <span>Something went wrong. Please try again.</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => reload()}
-                    className="text-red-400 hover:text-red-300 ml-2"
-                  >
-                    <RotateCcw className="h-3 w-3 mr-1" />
-                    Retry
-                  </Button>
-                </div>
-              )}
-
               <PromptInput onSubmit={handleFormSubmit} className="mt-4">
                 <PromptInputBody>
                   <PromptInputAttachments>
@@ -424,7 +553,7 @@ export function FloatingChat({
                     value={input}
                     onChange={handleInputChange}
                     placeholder="Type your message..."
-                    disabled={isLoading}
+                    disabled={isLoading || isHealthLoading || !agentHealth.health?.isOnline}
                   />
                 </PromptInputBody>
                 <PromptInputToolbar>
@@ -438,22 +567,12 @@ export function FloatingChat({
                   </PromptInputTools>
                   <PromptInputSubmit
                     status={isLoading ? "streaming" : "ready"}
-                    disabled={!input?.trim() || isLoading}
+                    disabled={!input?.trim() || isLoading || isHealthLoading || !agentHealth.health?.isOnline}
                   />
                 </PromptInputToolbar>
               </PromptInput>
 
-              {/* Status indicator */}
-              {isLoading && (
-                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                    <div className="w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                    <div className="w-2 h-2 bg-current rounded-full animate-bounce"></div>
-                  </div>
-                  Agent is thinking...
-                </div>
-              )}
+              
             </div>
           </div>
         </motion.div>

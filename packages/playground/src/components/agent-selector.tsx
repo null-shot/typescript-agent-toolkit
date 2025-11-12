@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Wifi, WifiOff, Plus } from "lucide-react";
+import { Wifi, WifiOff, Plus, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -10,9 +10,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { type Agent, getAllAgents } from "@/lib/config";
 import { AddAgentModal } from "./add-agent-modal";
 import { type CustomAgent } from "@/lib/agent-storage";
+import { useAgentsHealth } from "@/hooks/use-agent-health";
+import { getAgentStatusMessage } from "@/lib/agent-health";
 
 interface AgentSelectorProps {
   selectedAgent: Agent;
@@ -26,29 +29,14 @@ export function AgentSelector({
   className,
 }: AgentSelectorProps) {
   const [agents, setAgents] = useState<Agent[]>(getAllAgents());
-  const [isConnected, setIsConnected] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-
-  // Check connection status - ping root endpoint expecting 404 (which means agent is alive)
-  useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        await fetch(`${selectedAgent.url}/`, {
-          method: "GET",
-          signal: AbortSignal.timeout(3000),
-        });
-        // Agent is alive if we get any response (including 404)
-        setIsConnected(true);
-      } catch {
-        setIsConnected(false);
-      }
-    };
-
-    checkConnection();
-    const interval = setInterval(checkConnection, 10000); // Check every 10 seconds
-
-    return () => clearInterval(interval);
-  }, [selectedAgent.url]);
+  
+  // Use health monitoring for all agents
+  const { health: agentHealth, isLoading, error } = useAgentsHealth(agents, 30000);
+  
+  // Find health status for selected agent
+  const selectedAgentHealth = agentHealth.find(a => a.id === selectedAgent.id)?.health;
+  const isConnected = selectedAgentHealth?.isOnline ?? false;
 
   const handleValueChange = (value: string) => {
     if (value === "__add_agent__") {
@@ -89,18 +77,41 @@ export function AgentSelector({
             <SelectValue placeholder="Select an agent" />
           </SelectTrigger>
         <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-          {agents.map((agent) => (
+          {agentHealth.map((agent) => (
             <SelectItem
               key={agent.id}
               value={agent.id}
               className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
+              disabled={!agent.health?.isOnline}
             >
               <div className="flex items-center gap-2">
+                <div className="flex items-center">
+                  <Circle 
+                    className={`h-2 w-2 ${
+                      agent.health?.isOnline 
+                        ? (agent.health.responseTime && agent.health.responseTime > 2000 ? 'text-yellow-400' : 'text-green-400')
+                        : 'text-red-400'
+                    }`} 
+                    fill="currentColor"
+                  />
+                </div>
                 <div className="flex flex-col">
-                  <span className="font-medium text-gray-900 dark:text-white">{agent.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900 dark:text-white">{agent.name}</span>
+                    {!agent.health?.isOnline && (
+                      <Badge variant="destructive" className="text-xs py-0 px-1 h-4">
+                        Offline
+                      </Badge>
+                    )}
+                  </div>
                   <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[180px]">
                     {agent.url.replace(/^https?:\/\//, "")}
                   </span>
+                  {agent.health && (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {getAgentStatusMessage(agent)}
+                    </span>
+                  )}
                 </div>
               </div>
             </SelectItem>
