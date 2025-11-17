@@ -93,7 +93,7 @@ export function FloatingChatButton() {
   );
 }
 
-interface FloatingChatInternalProps {
+export interface FloatingChatInternalProps {
   isOpen: boolean;
   onClose: () => void;
   className?: string;

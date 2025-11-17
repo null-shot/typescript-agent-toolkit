@@ -11,13 +11,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { type Agent, getAllAgents } from "@/lib/config";
+import { type Agent } from "@/lib/config";
 import { AddAgentModal } from "./add-agent-modal";
-import { type CustomAgent } from "@/lib/agent-storage";
-import { useAgentsHealth } from "@/hooks/use-agent-health";
+import { useAgentSelection, useAgentManagement } from "@/lib/agent-context";
 import { getAgentStatusMessage } from "@/lib/agent-health";
 
-interface AgentSelectorProps {
+export interface AgentSelectorProps {
   selectedAgent: Agent;
   onAgentChange: (agent: Agent) => void;
   className?: string;
@@ -28,20 +27,27 @@ export function AgentSelector({
   onAgentChange,
   className,
 }: AgentSelectorProps) {
-  const [agents, setAgents] = useState<Agent[]>(getAllAgents());
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  // Use health monitoring for all agents
+  // Use the agent context hooks
   const {
-    health: agentHealth,
-    isLoading,
-    error,
-  } = useAgentsHealth(agents, 30000);
+    agents,
+    selectedAgent: contextSelectedAgent,
+    selectAgent,
+  } = useAgentSelection();
+  const { refreshAgents } = useAgentManagement();
+
+  // Use the selected agent from props or context (props takes precedence)
+  const currentAgent = selectedAgent || contextSelectedAgent;
+
+  // Refresh agent health on mount
+  useEffect(() => {
+    refreshAgents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array to run only on mount
 
   // Find health status for selected agent
-  const selectedAgentHealth = agentHealth.find(
-    (a) => a.id === selectedAgent.id,
-  )?.health;
+  const selectedAgentHealth = currentAgent?.health;
   const isConnected = selectedAgentHealth?.isOnline ?? false;
 
   const handleValueChange = (value: string) => {
@@ -50,17 +56,23 @@ export function AgentSelector({
       return;
     }
 
-    const agent = agents.find((a) => a.id === value);
+    const agent = agents.find((agent) => agent.id === value);
     if (agent) {
+      // Update both the context and call the prop callback
+      selectAgent(agent.id);
       onAgentChange(agent);
     }
   };
 
-  const handleAgentAdded = (newAgent: CustomAgent) => {
-    // Refresh agents list
-    setAgents(getAllAgents());
-    // Automatically select the new agent
-    onAgentChange(newAgent);
+  const handleAgentAdded = (newAgent: Agent) => {
+    // The context will automatically handle the new agent
+    // Just close the modal and the new agent will appear in the list
+    setIsAddModalOpen(false);
+    // Automatically select the new agent if it's online
+    if (newAgent.health?.isOnline) {
+      selectAgent(newAgent.id);
+      onAgentChange(newAgent);
+    }
   };
 
   return (
@@ -78,12 +90,12 @@ export function AgentSelector({
         </div>
       </div>
 
-      <Select value={selectedAgent.id} onValueChange={handleValueChange}>
+      <Select value={currentAgent?.id} onValueChange={handleValueChange}>
         <SelectTrigger className="w-[240px] bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white shadow-sm">
           <SelectValue placeholder="Select an agent" />
         </SelectTrigger>
         <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-          {agentHealth.map((agent) => (
+          {agents.map((agent) => (
             <SelectItem
               key={agent.id}
               value={agent.id}
