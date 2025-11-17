@@ -16,28 +16,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { 
-  saveCustomAgent, 
-  validateAgentUrl, 
+import {
+  validateAgentUrl,
   testAgentConnection,
-  type CustomAgent 
+  type CustomAgent,
 } from "@/lib/agent-storage";
+import { useAgentManagement } from "@/lib/agent-context";
+import { type Agent } from "@/lib/config";
 
-interface AddAgentModalProps {
+export interface AddAgentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAgentAdded: (agent: CustomAgent) => void;
 }
 
-export function AddAgentModal({ 
-  open, 
-  onOpenChange, 
-  onAgentAdded 
+export function AddAgentModal({
+  open,
+  onOpenChange,
+  onAgentAdded,
 }: AddAgentModalProps) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<{
     tested: boolean;
@@ -46,12 +45,14 @@ export function AddAgentModal({
   }>({ tested: false, online: false });
   const [error, setError] = useState<string | null>(null);
 
+  // Use the agent management context
+  const { addAgent, isLoading } = useAgentManagement();
+
   const resetForm = () => {
     setName("");
     setUrl("");
     setError(null);
     setConnectionStatus({ tested: false, online: false });
-    setIsLoading(false);
     setIsTestingConnection(false);
   };
 
@@ -77,7 +78,7 @@ export function AddAgentModal({
         online: result.isOnline,
         error: result.error,
       });
-      
+
       if (!result.isOnline) {
         setError(`Connection failed: ${result.error}`);
       }
@@ -91,7 +92,7 @@ export function AddAgentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!name.trim() || !url.trim()) {
       setError("Both name and URL are required");
       return;
@@ -104,17 +105,21 @@ export function AddAgentModal({
       return;
     }
 
-    setIsLoading(true);
     setError(null);
 
     try {
-      const newAgent = saveCustomAgent(name.trim(), url.trim());
-      onAgentAdded(newAgent);
-      handleClose();
+      const result = await addAgent(name.trim(), url.trim());
+      if (result.success) {
+        // Find the newly added agent (it will be in the context)
+        // For now, we'll just notify that an agent was added
+        // The actual agent object will be available through the context
+        onAgentAdded({} as Agent);
+        handleClose();
+      } else {
+        setError(result.error || "Failed to add agent");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save agent");
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -123,7 +128,7 @@ export function AddAgentModal({
       <DialogPortal>
         {/* Custom solid overlay */}
         <DialogOverlay className="bg-black/90 backdrop-blur-sm" />
-        <DialogContent 
+        <DialogContent
           className="sm:max-w-md bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 shadow-2xl"
           showCloseButton={true}
         >
@@ -133,13 +138,19 @@ export function AddAgentModal({
               Add New Agent
             </DialogTitle>
             <DialogDescription className="text-gray-600 dark:text-gray-300">
-              Add a custom agent by providing a name and URL. The URL should point to a running agent instance.
+              Add a custom agent by providing a name and URL. The URL should
+              point to a running agent instance.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="agent-name" className="text-gray-900 dark:text-white font-medium">Agent Name</Label>
+              <Label
+                htmlFor="agent-name"
+                className="text-gray-900 dark:text-white font-medium"
+              >
+                Agent Name
+              </Label>
               <Input
                 id="agent-name"
                 placeholder="My Custom Agent"
@@ -150,7 +161,12 @@ export function AddAgentModal({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="agent-url" className="text-gray-900 dark:text-white font-medium">Agent URL</Label>
+              <Label
+                htmlFor="agent-url"
+                className="text-gray-900 dark:text-white font-medium"
+              >
+                Agent URL
+              </Label>
               <div className="flex gap-2">
                 <Input
                   id="agent-url"
@@ -177,21 +193,27 @@ export function AddAgentModal({
                   )}
                 </Button>
               </div>
-            
+
               {/* Connection Status */}
               {connectionStatus.tested && (
                 <div className="flex items-center gap-2 text-sm">
                   {connectionStatus.online ? (
                     <>
                       <Check className="h-4 w-4 text-green-500" />
-                      <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20">
+                      <Badge
+                        variant="outline"
+                        className="text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20"
+                      >
                         Connection successful
                       </Badge>
                     </>
                   ) : (
                     <>
                       <AlertCircle className="h-4 w-4 text-red-500" />
-                      <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 dark:bg-red-900/20">
+                      <Badge
+                        variant="outline"
+                        className="text-red-600 border-red-200 bg-red-50 dark:bg-red-900/20"
+                      >
                         Connection failed
                       </Badge>
                     </>
@@ -210,17 +232,17 @@ export function AddAgentModal({
             )}
 
             <DialogFooter className="gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={handleClose}
                 disabled={isLoading}
                 className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={isLoading || !name.trim() || !url.trim()}
                 className="min-w-[80px] bg-blue-600 hover:bg-blue-700 text-white border-0"
               >
