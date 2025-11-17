@@ -1,6 +1,6 @@
 export const metadata = {
-  "title": "Getting Started",
-  "description": "Build your first MCP server with the TypeScript MCP Template"
+  title: "Getting Started",
+  description: "Build your first MCP server with the TypeScript MCP Template",
 };
 
 **Ready to build your first MCP server?** This guide walks you through creating a complete Model Context Protocol server using our TypeScript template. You'll learn the core concepts while building real tools that AI agents can use.
@@ -10,7 +10,7 @@ export const metadata = {
 By the end of this guide, you'll have a fully functional MCP server with:
 
 - 🧰 **Custom Tools**: Functions that AI agents can call
-- 📚 **Resources**: Data sources agents can read  
+- 📚 **Resources**: Data sources agents can read
 - 💭 **Prompts**: Reusable prompt templates
 - 🌐 **WebSocket & SSE Support**: Real-time communication protocols
 - 🚀 **Cloudflare Deployment**: Production-ready hosting
@@ -28,59 +28,19 @@ nullshot create mcp
 choose your project name: eg: my-mcp-server
 
 cd my-mcp-server (this is where your project is)
-
-# Initialize configuration and add npm scripts
-nullshot init
 ```
 
 This creates:
-- `mcp.json` - MCP server configuration
-- Adds `dev:nullshot` script to package.json
-- Adds `postinstall` script for automatic dependency management
-- Optionally configures `cf-typegen` for Cloudflare Workers types
 
-### 2. Configure Your Services
+- Adds `dev` script to package.json that will start the MCP server in dev mode
+- Adds some wrangler scripts for building and deploying your MCP server
+- Adds `cf-typegen` for Cloudflare Workers type generation
 
-Edit the generated `mcp.json` with the TypeScript MCP template:
-
-```json
-{
-  "servers": {
-    "mcp-template": {
-      "source": "https://github.com/null-shot/typescript-mcp-template.git#main",
-      "command": "npm run dev"
-    }
-  }
-}
-```
-
-### 3. Install Dependencies
-
-```bash
-# Install all configured servers and dependencies
-nullshot install
-```
-
-This will:
-- Install packages from GitHub repositories
-- Detect and extract Cloudflare Workers configurations
-- Run D1 database migrations if present
-- Generate service bindings in your `wrangler.jsonc`
-- Generate Cloudflare Workers types with `cf-typegen`
-
-
-### 5. Start Development
+### 2. Start Development
 
 ```bash
 # Run all services in development mode
-nullshot dev
-```
-
-### 6. Start MCP Inspector
-
-```bash
-# Start the MCP Inspector in a new terminal
-pnpm dev
+pnpm run dev
 ```
 
 The MCP Inspector will automatically open at `http://localhost:6274` and your MCP server will run on `http://localhost:8787`. The Inspector should automatically connect using SSE transport at `http://localhost:8787/sse`.
@@ -110,27 +70,30 @@ The entry point handles routing and protocol negotiation:
 ```typescript
 // Worker entrypoint for handling incoming requests
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<Response> {
     const url = new URL(request.url);
-    const sessionIdStr = url.searchParams.get('sessionId')
+    const sessionIdStr = url.searchParams.get("sessionId");
     const id = sessionIdStr
-        ? env.MCP_SERVER.idFromString(sessionIdStr)
-        : env.MCP_SERVER.newUniqueId();
+      ? env.MCP_SERVER.idFromString(sessionIdStr)
+      : env.MCP_SERVER.newUniqueId();
 
     console.log(`Fetching sessionId: ${sessionIdStr} with id: ${id}`);
-    
-    url.searchParams.set('sessionId', id.toString());
 
-    return env.MCP_SERVER.get(id).fetch(new Request(
-        url.toString(),
-        request
-    ));
-  }
+    url.searchParams.set("sessionId", id.toString());
+
+    return env.MCP_SERVER.get(id).fetch(new Request(url.toString(), request));
+  },
 };
 ```
+
 The above forwards requets to a dedicated MCP server which supports the following with zero configuration:
 
 **Key Features:**
+
 - **Health Check**: Simple endpoint to verify server status
 - **WebSocket Support**: Real-time bidirectional communication
 - **SSE Support**: Server-sent events for streaming responses
@@ -150,8 +113,8 @@ export class ExampleMcpServer extends McpHonoServerDO<Env> {
   // Required: Define server metadata
   getImplementation(): Implementation {
     return {
-      name: 'ExampleMcpServer',
-      version: '1.0.0',
+      name: "ExampleMcpServer",
+      version: "1.0.0",
     };
   }
 
@@ -159,10 +122,10 @@ export class ExampleMcpServer extends McpHonoServerDO<Env> {
   configureServer(server: McpServer): void {
     // Add tools (functions agents can call)
     setupServerTools(server);
-    
+
     // Add resources (data agents can read)
     setupServerResources(server);
-    
+
     // Add prompts (templates agents can use)
     setupServerPrompts(server);
   }
@@ -170,6 +133,7 @@ export class ExampleMcpServer extends McpHonoServerDO<Env> {
 ```
 
 **Key Concepts:**
+
 - **Implementation**: Metadata about your MCP server
 - **Tools**: Functions that agents can execute
 - **Resources**: Data sources agents can access
@@ -186,18 +150,22 @@ import { z } from "zod";
 export function setupServerTools(server: McpServer) {
   // Hello World Tool - A simple greeting function
   server.tool(
-    'hello-world',                    // Tool name
-    'Say hello to someone',           // Description for the AI
-    {                                // Parameters schema using Zod
-      name: z.string().describe('Name of the person to greet'),
-      language: z.enum(['english', 'spanish', 'french']).optional().describe('Language for greeting')
+    "hello-world", // Tool name
+    "Say hello to someone", // Description for the AI
+    {
+      // Parameters schema using Zod
+      name: z.string().describe("Name of the person to greet"),
+      language: z
+        .enum(["english", "spanish", "french"])
+        .optional()
+        .describe("Language for greeting"),
     },
-    async ({ name, language = 'english' }) => {
+    async ({ name, language = "english" }) => {
       // Tool implementation
       const greetings = {
         english: `Hello, ${name}! 👋`,
         spanish: `¡Hola, ${name}! 👋`,
-        french: `Bonjour, ${name}! 👋`
+        french: `Bonjour, ${name}! 👋`,
       };
 
       const greeting = greetings[language] || greetings.english;
@@ -206,43 +174,49 @@ export function setupServerTools(server: McpServer) {
         content: [
           {
             type: "text",
-            text: greeting
-          }
-        ]
+            text: greeting,
+          },
+        ],
       };
     }
   );
 
   // Advanced Tool - Get current time with formatting
   server.tool(
-    'get-current-time',
-    'Get the current date and time with optional formatting',
+    "get-current-time",
+    "Get the current date and time with optional formatting",
     {
-      format: z.enum(['iso', 'human', 'timestamp']).optional().describe('Output format'),
-      timezone: z.string().optional().describe('Timezone (e.g., America/New_York)')
+      format: z
+        .enum(["iso", "human", "timestamp"])
+        .optional()
+        .describe("Output format"),
+      timezone: z
+        .string()
+        .optional()
+        .describe("Timezone (e.g., America/New_York)"),
     },
-    async ({ format = 'human', timezone = 'UTC' }) => {
+    async ({ format = "human", timezone = "UTC" }) => {
       const now = new Date();
-      
+
       let timeString: string;
       switch (format) {
-        case 'iso':
+        case "iso":
           timeString = now.toISOString();
           break;
-        case 'timestamp':
+        case "timestamp":
           timeString = now.getTime().toString();
           break;
-        case 'human':
+        case "human":
         default:
-          timeString = now.toLocaleString('en-US', { 
+          timeString = now.toLocaleString("en-US", {
             timeZone: timezone,
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
           });
       }
 
@@ -250,37 +224,38 @@ export function setupServerTools(server: McpServer) {
         content: [
           {
             type: "text",
-            text: `Current time: ${timeString} (${timezone})`
-          }
-        ]
+            text: `Current time: ${timeString} (${timezone})`,
+          },
+        ],
       };
     }
   );
 
   // Utility Tool - Generate random number
   server.tool(
-    'random-number',
-    'Generate a random number within a specified range',
+    "random-number",
+    "Generate a random number within a specified range",
     {
-      min: z.number().describe('Minimum value (inclusive)'),
-      max: z.number().describe('Maximum value (inclusive)'),
-      decimals: z.number().optional().describe('Number of decimal places')
+      min: z.number().describe("Minimum value (inclusive)"),
+      max: z.number().describe("Maximum value (inclusive)"),
+      decimals: z.number().optional().describe("Number of decimal places"),
     },
     async ({ min, max, decimals = 0 }) => {
       if (min > max) {
-        throw new Error('Minimum value cannot be greater than maximum value');
+        throw new Error("Minimum value cannot be greater than maximum value");
       }
 
       const random = Math.random() * (max - min) + min;
-      const result = decimals > 0 ? Number(random.toFixed(decimals)) : Math.floor(random);
+      const result =
+        decimals > 0 ? Number(random.toFixed(decimals)) : Math.floor(random);
 
       return {
         content: [
           {
             type: "text",
-            text: `Random number: ${result}`
-          }
-        ]
+            text: `Random number: ${result}`,
+          },
+        ],
       };
     }
   );
@@ -305,14 +280,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 export function setupServerResources(server: McpServer) {
   // Simple text resource
   server.resource(
-    'greeting-templates',
-    'resource://greeting-templates',
+    "greeting-templates",
+    "resource://greeting-templates",
     async (uri: URL) => {
       const templates = {
         formal: "Good day, {name}. I hope this message finds you well.",
         casual: "Hey {name}! What's up?",
         business: "Dear {name}, Thank you for your time.",
-        friendly: "Hi there {name}! Hope you're having a great day!"
+        friendly: "Hi there {name}! Hope you're having a great day!",
       };
 
       return {
@@ -320,46 +295,47 @@ export function setupServerResources(server: McpServer) {
           {
             uri: uri.href,
             mimeType: "application/json",
-            text: JSON.stringify(templates, null, 2)
-          }
-        ]
+            text: JSON.stringify(templates, null, 2),
+          },
+        ],
       };
     }
   );
 
   // Dynamic resource with parameters
   server.resource(
-    'system-info',
-    'resource://system-info/{category}',
+    "system-info",
+    "resource://system-info/{category}",
     async (uri: URL) => {
-      const category = uri.pathname.split('/').pop();
-      
+      const category = uri.pathname.split("/").pop();
+
       const systemInfo = {
         server: {
           name: "ExampleMcpServer",
           version: "1.0.0",
           uptime: process.uptime(),
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         },
         capabilities: {
-          tools: ['hello-world', 'get-current-time', 'random-number'],
-          resources: ['greeting-templates', 'system-info'],
-          prompts: ['code-review', 'explain-concept']
-        }
+          tools: ["hello-world", "get-current-time", "random-number"],
+          resources: ["greeting-templates", "system-info"],
+          prompts: ["code-review", "explain-concept"],
+        },
       };
 
-      const data = category && systemInfo[category as keyof typeof systemInfo] 
-        ? systemInfo[category as keyof typeof systemInfo]
-        : systemInfo;
+      const data =
+        category && systemInfo[category as keyof typeof systemInfo]
+          ? systemInfo[category as keyof typeof systemInfo]
+          : systemInfo;
 
       return {
         contents: [
           {
             uri: uri.href,
-            mimeType: "application/json", 
-            text: JSON.stringify(data, null, 2)
-          }
-        ]
+            mimeType: "application/json",
+            text: JSON.stringify(data, null, 2),
+          },
+        ],
       };
     }
   );
@@ -375,18 +351,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function setupServerPrompts(server: McpServer) {
   // Code review prompt
-  server.prompt(
-    'code-review',
-    'Generate a thorough code review',
-    (args) => ({
-      messages: [
-        {
-          role: 'user',
-          content: {
-            type: 'text',
-            text: `Please review this code and provide feedback:
+  server.prompt("code-review", "Generate a thorough code review", (args) => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Please review this code and provide feedback:
 
-${args?.code || '[No code provided]'}
+${args?.code || "[No code provided]"}
 
 Focus on:
 - Code quality and best practices
@@ -394,46 +367,46 @@ Focus on:
 - Performance optimizations
 - Maintainability improvements
 
-Language: ${args?.language || 'Unknown'}`
-          }
-        }
-      ]
-    })
-  );
+Language: ${args?.language || "Unknown"}`,
+        },
+      },
+    ],
+  }));
 
   // Concept explanation prompt
   server.prompt(
-    'explain-concept',
-    'Explain a concept clearly and simply',
+    "explain-concept",
+    "Explain a concept clearly and simply",
     (args) => ({
       messages: [
         {
-          role: 'user', 
+          role: "user",
           content: {
-            type: 'text',
-            text: `Please explain "${args?.concept || '[No concept provided]'}" in simple terms.
+            type: "text",
+            text: `Please explain "${args?.concept || "[No concept provided]"}" in simple terms.
 
-Target audience: ${args?.audience || 'General audience'}
-Detail level: ${args?.level || 'Beginner'}
+Target audience: ${args?.audience || "General audience"}
+Detail level: ${args?.level || "Beginner"}
 
 Include:
 - Clear definition
 - Real-world examples
 - Common misconceptions (if any)
-- Why it matters`
-          }
-        }
-      ]
+- Why it matters`,
+          },
+        },
+      ],
     })
   );
 }
 ```
+
 ## Test locally
 
 1. run `pnpm run dev`
 2. Go to the `http://localhost:6724` and enter in the mcp server `http://localhost:8787/sse` and start testing with MCP Inspector
 
-*Soon you can use the Playground to test MCPs!*
+_Soon you can use the Playground to test MCPs!_
 
 ## Deployment to Production
 
@@ -464,21 +437,33 @@ Once deployed, your MCP server will be available at:
 
 ```typescript
 // File system tool
-server.tool('read-file', 'Read file contents', {
-  path: z.string().describe('File path to read')
-}, async ({ path }) => {
-  const content = await Deno.readTextFile(path);
-  return { content: [{ type: "text", text: content }] };
-});
+server.tool(
+  "read-file",
+  "Read file contents",
+  {
+    path: z.string().describe("File path to read"),
+  },
+  async ({ path }) => {
+    const content = await Deno.readTextFile(path);
+    return { content: [{ type: "text", text: content }] };
+  }
+);
 
-// API integration tool  
-server.tool('weather', 'Get weather information', {
-  location: z.string().describe('City name or coordinates')
-}, async ({ location }) => {
-  const weather = await fetch(`https://api.weather.com/v1/current?location=${location}`);
-  const data = await weather.json();
-  return { content: [{ type: "text", text: JSON.stringify(data) }] };
-});
+// API integration tool
+server.tool(
+  "weather",
+  "Get weather information",
+  {
+    location: z.string().describe("City name or coordinates"),
+  },
+  async ({ location }) => {
+    const weather = await fetch(
+      `https://api.weather.com/v1/current?location=${location}`
+    );
+    const data = await weather.json();
+    return { content: [{ type: "text", text: JSON.stringify(data) }] };
+  }
+);
 ```
 
 ### Advanced Patterns
@@ -498,4 +483,4 @@ server.tool('weather', 'Get weather information', {
 
 ---
 
-🎉 **Congratulations!** You've built your first MCP server. Your tools are now ready to be used by AI agents across any platform that supports the Model Context Protocol. 
+🎉 **Congratulations!** You've built your first MCP server. Your tools are now ready to be used by AI agents across any platform that supports the Model Context Protocol.
