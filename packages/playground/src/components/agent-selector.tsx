@@ -30,12 +30,18 @@ export function AgentSelector({
 }: AgentSelectorProps) {
   const [agents, setAgents] = useState<Agent[]>(getAllAgents());
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  
+
   // Use health monitoring for all agents
-  const { health: agentHealth, isLoading, error } = useAgentsHealth(agents, 30000);
-  
+  const {
+    health: agentHealth,
+    isLoading,
+    error,
+  } = useAgentsHealth(agents, 30000);
+
   // Find health status for selected agent
-  const selectedAgentHealth = agentHealth.find(a => a.id === selectedAgent.id)?.health;
+  const selectedAgentHealth = agentHealth.find(
+    (a) => a.id === selectedAgent.id,
+  )?.health;
   const isConnected = selectedAgentHealth?.isOnline ?? false;
 
   const handleValueChange = (value: string) => {
@@ -43,7 +49,7 @@ export function AgentSelector({
       setIsAddModalOpen(true);
       return;
     }
-    
+
     const agent = agents.find((a) => a.id === value);
     if (agent) {
       onAgentChange(agent);
@@ -72,10 +78,10 @@ export function AgentSelector({
         </div>
       </div>
 
-        <Select value={selectedAgent.id} onValueChange={handleValueChange}>
-          <SelectTrigger className="w-[240px] bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white shadow-sm">
-            <SelectValue placeholder="Select an agent" />
-          </SelectTrigger>
+      <Select value={selectedAgent.id} onValueChange={handleValueChange}>
+        <SelectTrigger className="w-[240px] bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white shadow-sm">
+          <SelectValue placeholder="Select an agent" />
+        </SelectTrigger>
         <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
           {agentHealth.map((agent) => (
             <SelectItem
@@ -86,20 +92,28 @@ export function AgentSelector({
             >
               <div className="flex items-center gap-2">
                 <div className="flex items-center">
-                  <Circle 
+                  <Circle
                     className={`h-2 w-2 ${
-                      agent.health?.isOnline 
-                        ? (agent.health.responseTime && agent.health.responseTime > 2000 ? 'text-yellow-400' : 'text-green-400')
-                        : 'text-red-400'
-                    }`} 
+                      agent.health?.isOnline
+                        ? agent.health.responseTime &&
+                          agent.health.responseTime > 2000
+                          ? "text-yellow-400"
+                          : "text-green-400"
+                        : "text-red-400"
+                    }`}
                     fill="currentColor"
                   />
                 </div>
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900 dark:text-white">{agent.name}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {agent.name}
+                    </span>
                     {!agent.health?.isOnline && (
-                      <Badge variant="destructive" className="text-xs py-0 px-1 h-4">
+                      <Badge
+                        variant="destructive"
+                        className="text-xs py-0 px-1 h-4"
+                      >
                         Offline
                       </Badge>
                     )}
@@ -116,7 +130,7 @@ export function AgentSelector({
               </div>
             </SelectItem>
           ))}
-          
+
           {/* Add Agent Option */}
           <SelectItem
             value="__add_agent__"
