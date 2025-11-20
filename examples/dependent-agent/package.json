@@ -21,7 +21,10 @@
     "@nullshot/cli": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "wrangler": "catalog:"
+    "wrangler": "catalog:",
+    "http-errors": "^2.0.0",
+    "raw-body": "^3.0.1",
+    "statuses": "^2.0.2"
   },
   "mcpServers": {
     "mcp-template": {

@@ -9,15 +9,23 @@ export default defineWorkersConfig({
 				wrangler: { configPath: './test/wrangler.test.jsonc' },
 			},
 		},
-		// Only include our specific test files in src/
-		include: ['src/**/*.test.ts'],
-		// Temporarily exclude problematic Durable Object tests with ajv compatibility issues
-		exclude: ['**/test/hono.test.ts', '**/test/mcp-client.test.ts', '**/node_modules/**', '**/dist/**'],
+		// Include test files in both src and test directories
+		include: ['test/**/*.test.ts'],
+		deps: {
+			optimizer: {
+				ssr: {
+					include: ['ajv', 'raw-body', 'http-errors', 'statuses'],
+				},
+			},
+		},
+	},
+	resolve: {
+		alias: {
+			ajv: '@nullshot/test-utils/vitest/ajv-mock',
+			'ajv/dist/ajv': '@nullshot/test-utils/vitest/ajv-mock',
+		},
 	},
 	define: {
 		global: 'globalThis',
-	},
-	optimizeDeps: {
-		exclude: ['ajv'],
 	},
 });

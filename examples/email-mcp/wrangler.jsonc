@@ -1,33 +1,29 @@
 {
-  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "email-mcp",
   "main": "src/index.ts",
   "compatibility_date": "2025-03-10",
   "account_id": "7541b433fbcea05edcdd0b86dbdd41fc",
+  "compatibility_flags": ["nodejs_compat"],
 
   "durable_objects": {
-    "bindings": [
-      { "name": "EMAIL_MCP_SERVER", "class_name": "EmailMcpServer" }
-    ]
+    "bindings": [{ "name": "EMAIL_MCP_SERVER", "class_name": "EmailMcpServer" }]
   },
 
   // Register the Durable Object class with SQLite support
-  "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["EmailMcpServer"] }
-  ],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["EmailMcpServer"] }],
 
   // Cloudflare Email Workers "Send Email" binding
-  "send_email": [
-    { "name": "SEND_EMAIL" }
-  ],
+  "send_email": [{ "name": "SEND_EMAIL" }],
 
   "vars": {
     "MAIL_FROM": "no-reply@nullshot.ai",
     "ALLOWED_RECIPIENTS": "raymond@xavalabs.com,@nullshot.ai"
   },
 
-  // logs/traces 
+  // logs/traces
   "observability": {
     "enabled": true
   }
 }
+

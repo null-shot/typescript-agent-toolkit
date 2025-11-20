@@ -1,9 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { SSETransport } from './sse-transport';
 import { WebSocketTransport } from './websocket-transport';
 import { Implementation } from '@modelcontextprotocol/sdk/types.js';
 import { IMcpServer } from './mcp-server-interface';
+import { toFetchResponse, toReqRes } from 'fetch-to-node';
 // Transport factory removed - using direct imports
 const MAXIMUM_MESSAGE_SIZE = 4 * 1024 * 1024; // 4MB
 export const SSE_MESSAGE_ENDPOINT = '/sse/message';
@@ -19,11 +21,11 @@ interface WebSocketAttachment {
 
 /**
  * McpDurableServer is a Durable Object implementation of an MCP server.
- * It supports SSE connections for event streaming and WebSocket connections with hibernation.
+ * It supports all transport connections for event streaming and WebSocket connections with hibernation.
  */
 export abstract class McpServerDO<Env = unknown> extends DurableObject<Env> {
 	private server: IMcpServer;
-	private sessions: Map<string, SSETransport | WebSocketTransport> = new Map();
+	private sessions: Map<string, SSETransport | WebSocketTransport | StreamableHTTPServerTransport> = new Map();
 	protected ctx: DurableObjectState; // Make ctx accessible to subclasses
 
 	constructor(ctx: DurableObjectState, env: any, server?: IMcpServer) {
@@ -236,11 +238,41 @@ export abstract class McpServerDO<Env = unknown> extends DurableObject<Env> {
 	}
 
 	/**
+	 * Process HTTP requests using the StreamableHTTPServerTransport
+	 */
+	protected async processHttpRequest(request: Request): Promise<Response> {
+		// Create a transport instance for this request
+		const transport = new StreamableHTTPServerTransport({
+			sessionIdGenerator: () => crypto.randomUUID(),
+			// Enable JSON responses for simpler request/response scenarios
+			enableJsonResponse: true,
+		});
+
+		// Connect the transport to our server
+		await this.server.connect(transport);
+
+		// Create adapters for Cloudflare Workers Request/Response to Node.js HTTP objects
+		const { req, res } = toReqRes(request);
+
+		const body = request.method === 'POST' ? await request.json() : undefined;
+
+		// Handle the request using the SDK's transport
+		await transport.handleRequest(req, res, body);
+
+		return await toFetchResponse(res);
+	}
+
+	/**
 	 * Main fetch handler
 	 */
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 		const path = url.pathname;
+
+		// Process HTTP requests for the /mcp endpoint
+		if (path.endsWith('/mcp')) {
+			return await this.processHttpRequest(request);
+		}
 
 		// Process WebSocket upgrade requests
 		if (path.endsWith(WEBSOCKET_ENDPOINT)) {

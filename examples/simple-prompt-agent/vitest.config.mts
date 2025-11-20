@@ -7,5 +7,6 @@ export default defineWorkersConfig({
 				wrangler: { configPath: './wrangler.jsonc' },
 			},
 		},
+		deps: { optimizer: { ssr: { include: ['http-errors'] } } },
 	},
 });

@@ -1,3 +1,6 @@
-import { createMcpWorkersConfig } from "@nullshot/test-utils/vitest/mcpWorkersConfig";
+import { createMcpWorkersConfig } from '@nullshot/test-utils/vitest/mcpWorkersConfig';
 
-export default createMcpWorkersConfig();
+export default createMcpWorkersConfig({
+	test: { deps: { optimizer: { ssr: { include: ['http-errors'] } } } },
+});
+

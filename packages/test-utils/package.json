@@ -17,6 +17,11 @@
       "import": "./dist/mcp/WorkerSSEClientTransport.js",
       "default": "./dist/mcp/WorkerSSEClientTransport.js"
     },
+    "./mcp/WorkerStreamableHTTPClientTransport": {
+      "types": "./dist/mcp/WorkerStreamableHTTPClientTransport.d.ts",
+      "import": "./dist/mcp/WorkerStreamableHTTPClientTransport.js",
+      "default": "./dist/mcp/WorkerStreamableHTTPClientTransport.js"
+    },
     "./mcp/WorkerWebSocketClientTransport": {
       "types": "./dist/mcp/WorkerWebSocketClientTransport.d.ts",
       "import": "./dist/mcp/WorkerWebSocketClientTransport.js",
@@ -36,6 +41,11 @@
       "types": "./dist/vitest/ajv-mock.d.ts",
       "import": "./dist/vitest/ajv-mock.js",
       "default": "./dist/vitest/ajv-mock.js"
+    },
+    "./vitest/setup-ajv-mock": {
+      "types": "./dist/vitest/setup-ajv-mock.d.ts",
+      "import": "./dist/vitest/setup-ajv-mock.js",
+      "default": "./dist/vitest/setup-ajv-mock.js"
     },
     "./dist/vitest/mcpWorkersConfig.js": {
       "types": "./dist/vitest/mcpWorkersConfig.d.ts",

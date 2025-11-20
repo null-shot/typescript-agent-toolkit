@@ -5,7 +5,7 @@ import {
 } from "cloudflare:test";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { WorkerSSEClientTransport } from "@nullshot/test-utils/mcp/WorkerSSEClientTransport";
+import { WorkerStreamableHTTPClientTransport } from "@nullshot/test-utils/mcp/WorkerStreamableHTTPClientTransport";
 import { Expense } from "../src/repository";
 
 // Define response type for clarity
@@ -51,8 +51,8 @@ describe("Expense MCP Client Integration Tests", () => {
   });
 
   function createTransport(ctx: ExecutionContext) {
-    const url = new URL(`${baseUrl}/sse`);
-    return new WorkerSSEClientTransport(url, ctx);
+    const url = new URL(`${baseUrl}/mcp`);
+    return new WorkerStreamableHTTPClientTransport(url, ctx);
   }
 
   it("should initialize the client properly", () => {
@@ -62,7 +62,7 @@ describe("Expense MCP Client Integration Tests", () => {
   });
 
   it("should successfully connect to the expense MCP server", async () => {
-    console.log(`Testing SSE transport connection`);
+    console.log(`Testing StreamableHTTP transport connection`);
 
     const transport = createTransport(ctx);
     await client.connect(transport);

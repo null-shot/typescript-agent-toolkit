@@ -24,15 +24,18 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.68",
-    "@cloudflare/workers-types": "^4.20241218.0",
+    "@cloudflare/vitest-pool-workers": "catalog:default",
+    "@cloudflare/workers-types": "catalog:default",
     "@nullshot/test-utils": "workspace:*",
     "@types/node": "^22.10.2",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
-    "wrangler": "^4.33.1"
+    "wrangler": "^4.33.1",
+    "http-errors": "^2.0.0",
+    "raw-body": "^3.0.1",
+    "statuses": "^2.0.2"
   },
   "optionalDependencies": {
     "puppeteer": "^23.11.1"

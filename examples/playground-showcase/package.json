@@ -41,6 +41,9 @@
     "tailwindcss": "^3.3.2",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "catalog:",
-    "wrangler": "catalog:"
+    "wrangler": "catalog:",
+    "http-errors": "^2.0.0",
+    "raw-body": "^3.0.1",
+    "statuses": "^2.0.2"
   }
 }

@@ -46,15 +46,22 @@
 	},
 	"homepage": "https://xavalabs.com",
 	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "^0.8.43",
+		"@cloudflare/vitest-pool-workers": "catalog:default",
+		"@nullshot/test-utils": "workspace:*",
 		"@semantic-release/git": "^10.0.1",
+		"@types/node": "catalog:default",
+		"http-errors": "^2.0.0",
+		"raw-body": "^3.0.1",
 		"semantic-release": "^23.0.0",
-		"typescript": "^5.8.3",
-		"vitest": "3.0.x",
-		"wrangler": "^4.9.1"
+		"statuses": "^2.0.2",
+		"typescript": "catalog:default",
+		"vitest": "catalog:default",
+		"wrangler": "catalog:default"
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "catalog:",
-		"hono": "^4.7.6"
+		"fetch-to-node": "^2.1.0",
+		"hono": "^4.7.6",
+		"zod": "catalog:"
 	}
 }

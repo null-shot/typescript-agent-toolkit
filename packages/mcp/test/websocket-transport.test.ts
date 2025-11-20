@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { WebSocketTransport } from './websocket-transport';
+import { WebSocketTransport } from '../src/mcp/websocket-transport';
 import { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 
 describe('WebSocketTransport', () => {

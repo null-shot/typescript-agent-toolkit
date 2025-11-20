@@ -5,7 +5,7 @@ import {
 } from "cloudflare:test";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { WorkerSSEClientTransport } from "@nullshot/test-utils/mcp/WorkerSSEClientTransport";
+import { WorkerStreamableHTTPClientTransport } from "@nullshot/test-utils/mcp/WorkerStreamableHTTPClientTransport";
 
 // Define response type for clarity
 interface ToolResponse {
@@ -60,15 +60,16 @@ describe("Email MCP Client Integration Tests", () => {
   });
 
   function createTransport(ctx: ExecutionContext) {
-    const url = new URL(`${baseUrl}/sse`);
-    return new WorkerSSEClientTransport(url, ctx);
+    const url = new URL(`${baseUrl}/mcp`);
+    return new WorkerStreamableHTTPClientTransport(url, ctx);
   }
 
   it("should successfully connect to the email MCP server", async () => {
-    console.log(`Testing SSE transport connection`);
+    console.log(`Testing StreamableHTTP transport connection`);
 
     const transport = createTransport(ctx);
     await client.connect(transport);
+    console.log("Connected to transport");
 
     await waitOnExecutionContext(ctx);
     console.log(`Client connection test passed!`);
@@ -80,7 +81,7 @@ describe("Email MCP Client Integration Tests", () => {
     const transport = createTransport(ctx);
     await client.connect(transport);
 
-    const serverInfo = await client.getServerVersion();
+    const serverInfo = client.getServerVersion();
 
     // Verify that serverInfo is defined
     expect(serverInfo).not.toBeUndefined();
@@ -114,7 +115,7 @@ describe("Email MCP Client Integration Tests", () => {
     const textParts = intro!.messages!.map((m) =>
       typeof (m as any).content === "string"
         ? (m as any).content
-        : (m as any).content?.text
+        : (m as any).content?.text,
     );
     expect(textParts.join(" ")).toMatch(/Email MCP/i);
 
@@ -154,7 +155,7 @@ describe("Email MCP Client Integration Tests", () => {
     await client.connect(transport);
 
     const nonExistentId = crypto.randomUUID();
-    
+
     const getRes = (await client.callTool({
       name: "get_email",
       arguments: { id: nonExistentId },
@@ -189,17 +190,22 @@ describe("Email MCP Client Integration Tests", () => {
       });
       // If we get here, check if the result indicates an error
       const resultText = (result as any)?.content?.[0]?.text || "";
-      if (resultText.includes("not allowed") || resultText.includes("disallowed")) {
+      if (
+        resultText.includes("not allowed") ||
+        resultText.includes("disallowed")
+      ) {
         errorFound = true;
       }
     } catch (err: any) {
       errorFound = true;
       expect(String(err.message || err)).toMatch(/not allowed|disallowed/i);
     }
-    
+
     // In test environment, the validation logic should still work
     // If it doesn't throw, that's a test environment limitation, not a code issue
-    console.log(`Email rejection validation tested (result: ${errorFound ? 'rejected' : 'test env limitation'})`);
+    console.log(
+      `Email rejection validation tested (result: ${errorFound ? "rejected" : "test env limitation"})`,
+    );
 
     await waitOnExecutionContext(ctx);
     console.log(`Send email rejection test completed!`);
@@ -230,11 +236,15 @@ describe("Email MCP Client Integration Tests", () => {
       expect(sendRes.content[0].text).toMatch(/Email sent|invalid message-id/i);
     } catch (err: any) {
       // Email sending may fail in test environment due to binding limitations
-      expect(String(err.message || err)).toMatch(/invalid message-id|Email sent|not allowed/i);
+      expect(String(err.message || err)).toMatch(
+        /invalid message-id|Email sent|not allowed/i,
+      );
     }
 
     await waitOnExecutionContext(ctx);
-    console.log(`Send email test completed (test environment has email binding limitations)!`);
+    console.log(
+      `Send email test completed (test environment has email binding limitations)!`,
+    );
   });
 
   it("should validate email tool arguments", async () => {
