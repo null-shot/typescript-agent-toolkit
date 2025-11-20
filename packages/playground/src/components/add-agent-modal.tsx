@@ -82,7 +82,7 @@ export function AddAgentModal({
       if (!result.isOnline) {
         setError(`Connection failed: ${result.error}`);
       }
-    } catch (err) {
+    } catch {
       setError("Failed to test connection");
       setConnectionStatus({ tested: true, online: false });
     } finally {

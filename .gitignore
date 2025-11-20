@@ -13,7 +13,7 @@ node_modules/
 dist/
 build/
 lib/
-!src/**/lib
+!/**/src/**/lib
 
 # Cloudflare Workers
 .wrangler/

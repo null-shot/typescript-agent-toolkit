@@ -9,18 +9,25 @@ import { cn } from "@/lib/utils";
 import { type Agent, DEFAULT_AGENT } from "@/lib/config";
 import { type UIMessage } from "ai";
 import { useAgentHealth } from "@/hooks/use-agent-health";
-import { showErrorToast, showSuccessToast, showInfoToast, NetworkError, TimeoutError, AgentOfflineError } from "@/lib/error-utils";
-import { 
-  saveOfflineMessage, 
-  getOfflineMessages, 
+import {
+  showErrorToast,
+  showSuccessToast,
+  showInfoToast,
+  NetworkError,
+  TimeoutError,
+  AgentOfflineError,
+} from "@/lib/error-utils";
+import {
+  saveOfflineMessage,
+  getOfflineMessages,
   isOnline,
   createOfflineResponseMessage,
-  createOfflineNotificationMessage
+  createOfflineNotificationMessage,
 } from "@/lib/offline-utils";
 
 // Type guard to check if a part has tool-related properties
 function isToolUIPart(
-  part: UIMessage["parts"][0]
+  part: UIMessage["parts"][0],
 ): part is UIMessage["parts"][0] & {
   state:
     | "input-streaming"
@@ -41,11 +48,7 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
-import {
-  Message,
-  MessageContent,
-  MessageAvatar,
-} from "@/components/ai-elements/message";
+import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Response } from "@/components/ai-elements/response";
 import {
   PromptInput,
@@ -58,7 +61,6 @@ import {
   PromptInputBody,
   PromptInputSubmit,
   PromptInputTextarea,
-  PromptInputToolbar,
   PromptInputTools,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
@@ -69,6 +71,7 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
+import { Avatar, AvatarImage } from "@/components/ui/avatar";
 
 // Separate button component for the main page
 export function FloatingChatButton() {
@@ -112,49 +115,59 @@ export function FloatingChat({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [isOffline, setIsOffline] = useState(false);
-  
+
   // Monitor selected agent health
-  const { health: agentHealth, isLoading: isHealthLoading, error: healthError, checkHealth } = useAgentHealth(selectedAgent, 0);
-  
+  const {
+    health: agentHealth,
+    isLoading: isHealthLoading,
+    error: healthError,
+    checkHealth,
+  } = useAgentHealth(selectedAgent, 0);
+
   // Random avatars
   const [userAvatar] = useState(
-    () => `/avatars/${Math.floor(Math.random() * 19) + 1}.png`
+    () => `/avatars/${Math.floor(Math.random() * 19) + 1}.png`,
   );
   const [agentAvatar] = useState(
-    () => `/avatars/${Math.floor(Math.random() * 19) + 1}.png`
+    () => `/avatars/${Math.floor(Math.random() * 19) + 1}.png`,
   );
-  
+
   // Handle online/offline status
   useEffect(() => {
     const handleOnline = () => {
       setIsOffline(false);
       showSuccessToast("You're back online!");
-      
+
       // Try to send any offline messages
       const offlineMessages = getOfflineMessages();
       if (offlineMessages.length > 0) {
-        showInfoToast(`Found ${offlineMessages.length} saved messages. Attempting to send...`);
+        showInfoToast(
+          `Found ${offlineMessages.length} saved messages. Attempting to send...`,
+        );
       }
     };
-    
+
     const handleOffline = () => {
       setIsOffline(true);
-      showInfoToast("You're offline", "Messages will be saved and sent when you're back online.");
-      
+      showInfoToast(
+        "You're offline",
+        "Messages will be saved and sent when you're back online.",
+      );
+
       // Add offline notification to chat
-      setMessages(prev => [...prev, createOfflineNotificationMessage()]);
+      setMessages((prev) => [...prev, createOfflineNotificationMessage()]);
     };
-    
+
     // Set initial online status
     setIsOffline(!isOnline());
-    
+
     // Add event listeners
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
   }, []);
 
@@ -163,211 +176,234 @@ export function FloatingChat({
     setMessages([]); // Clear messages when agent changes
   };
 
-  const sendMessage = useCallback(async (messageText: string) => {
-    if (!messageText.trim()) return;
+  const sendMessage = useCallback(
+    async (messageText: string) => {
+      if (!messageText.trim()) return;
 
-    // Handle offline mode
-    if (isOffline || !isOnline()) {
-      // Save message for later sending
-      await saveOfflineMessage(selectedAgent, messageText.trim());
-      
-      // Add user message and offline response to chat
-      const userMessage: UIMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        parts: [{ type: "text", text: messageText.trim() }],
-      };
-      
-      setMessages(prev => [...prev, userMessage, createOfflineResponseMessage(messageText.trim())]);
-      setInput("");
-      return;
-    }
-
-    // Check if agent is online before sending message
-    try {
-      const updatedAgent = await checkHealth(true);
-      if (!updatedAgent.health?.isOnline) {
+      // Handle offline mode
+      if (isOffline || !isOnline()) {
         // Save message for later sending
         await saveOfflineMessage(selectedAgent, messageText.trim());
-        
+
         // Add user message and offline response to chat
         const userMessage: UIMessage = {
           id: crypto.randomUUID(),
           role: "user",
           parts: [{ type: "text", text: messageText.trim() }],
         };
-        
+
+        setMessages((prev) => [
+          ...prev,
+          userMessage,
+          createOfflineResponseMessage(messageText.trim()),
+        ]);
+        setInput("");
+        return;
+      }
+
+      // Check if agent is online before sending message
+      try {
+        const updatedAgent = await checkHealth(true);
+        if (!updatedAgent.health?.isOnline) {
+          // Save message for later sending
+          await saveOfflineMessage(selectedAgent, messageText.trim());
+
+          // Add user message and offline response to chat
+          const userMessage: UIMessage = {
+            id: crypto.randomUUID(),
+            role: "user",
+            parts: [{ type: "text", text: messageText.trim() }],
+          };
+
+          const offlineResponse: UIMessage = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            parts: [
+              {
+                type: "text",
+                text: `The agent ${updatedAgent.name} is currently offline. Your message has been saved and will be sent when the agent is back online.`,
+              },
+            ],
+          };
+
+          setMessages((prev) => [...prev, userMessage, offlineResponse]);
+          setInput("");
+          showErrorToast(
+            new AgentOfflineError(
+              `Agent ${updatedAgent.name} is offline: ${updatedAgent.health?.error || "Unknown error"}`,
+            ),
+            "Agent Offline",
+          );
+          return;
+        }
+      } catch (err) {
+        // Save message for later sending
+        await saveOfflineMessage(selectedAgent, messageText.trim());
+
+        // Add user message and offline response to chat
+        const userMessage: UIMessage = {
+          id: crypto.randomUUID(),
+          role: "user",
+          parts: [{ type: "text", text: messageText.trim() }],
+        };
+
         const offlineResponse: UIMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
-          parts: [{
-            type: "text",
-            text: `The agent ${updatedAgent.name} is currently offline. Your message has been saved and will be sent when the agent is back online.`
-          }]
+          parts: [
+            {
+              type: "text",
+              text: "There was an issue checking the agent status. Your message has been saved and will be sent when the connection is restored.",
+            },
+          ],
         };
-        
-        setMessages(prev => [...prev, userMessage, offlineResponse]);
+
+        setMessages((prev) => [...prev, userMessage, offlineResponse]);
         setInput("");
-        showErrorToast(new AgentOfflineError(`Agent ${updatedAgent.name} is offline: ${updatedAgent.health?.error || 'Unknown error'}`), "Agent Offline");
+        showErrorToast(err, "Health Check Failed");
         return;
       }
-    } catch (err) {
-      // Save message for later sending
-      await saveOfflineMessage(selectedAgent, messageText.trim());
-      
-      // Add user message and offline response to chat
+
+      // Add user message immediately
       const userMessage: UIMessage = {
         id: crypto.randomUUID(),
         role: "user",
         parts: [{ type: "text", text: messageText.trim() }],
       };
-      
-      const offlineResponse: UIMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        parts: [{
-          type: "text",
-          text: "There was an issue checking the agent status. Your message has been saved and will be sent when the connection is restored."
-        }]
-      };
-      
-      setMessages(prev => [...prev, userMessage, offlineResponse]);
+
+      setMessages((prev) => [...prev, userMessage]);
+      setIsLoading(true);
+      setError(null);
       setInput("");
-      showErrorToast(err, "Health Check Failed");
-      return;
-    }
 
-    // Add user message immediately
-    const userMessage: UIMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      parts: [{ type: "text", text: messageText.trim() }],
-    };
+      // Create assistant message ID upfront
+      const assistantMessageId = crypto.randomUUID();
 
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-    setError(null);
-    setInput("");
+      try {
+        console.log("Sending message to agent:", messageText);
 
-    // Create assistant message ID upfront
-    const assistantMessageId = crypto.randomUUID();
+        const response = await fetch(`${selectedAgent.url}/agent/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages: [...messages, userMessage].map((msg) => ({
+              role: msg.role,
+              content:
+                msg.parts?.find((part) => part.type === "text")?.text || "",
+            })),
+          }),
+          signal: AbortSignal.timeout(30000), // 30 second timeout
+        });
 
-    try {
-      console.log("Sending message to agent:", messageText);
+        if (!response.ok) {
+          let errorMessage = `Agent request failed: ${response.status}`;
+          if (response.status === 404) {
+            errorMessage =
+              "Agent endpoint not found. Please check the agent URL.";
+          } else if (response.status >= 500) {
+            errorMessage = "Agent server error. Please try again later.";
+          }
 
-      const response = await fetch(`${selectedAgent.url}/agent/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: [...messages, userMessage].map((msg) => ({
-            role: msg.role,
-            content:
-              msg.parts?.find((part) => part.type === "text")?.text || "",
-          })),
-        }),
-        signal: AbortSignal.timeout(30000), // 30 second timeout
-      });
-
-      if (!response.ok) {
-        let errorMessage = `Agent request failed: ${response.status}`;
-        if (response.status === 404) {
-          errorMessage = "Agent endpoint not found. Please check the agent URL.";
-        } else if (response.status >= 500) {
-          errorMessage = "Agent server error. Please try again later.";
+          throw new Error(errorMessage);
         }
-        
-        throw new Error(errorMessage);
-      }
 
-      // Create assistant message
-      const assistantMessage: UIMessage = {
-        id: assistantMessageId,
-        role: "assistant",
-        parts: [{ type: "text", text: "" }],
-      };
+        // Create assistant message
+        const assistantMessage: UIMessage = {
+          id: assistantMessageId,
+          role: "assistant",
+          parts: [{ type: "text", text: "" }],
+        };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+        setMessages((prev) => [...prev, assistantMessage]);
 
-      // Handle streaming response
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error("No response body");
-      }
+        // Handle streaming response
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error("No response body");
+        }
 
-      const decoder = new TextDecoder();
-      let buffer = "";
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || ""; // Keep incomplete line in buffer
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
 
-              if (data.type === "text-delta" && data.delta) {
-                // Update the assistant message with the new delta
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMessageId
-                      ? {
-                          ...msg,
-                          parts: msg.parts?.map((part) =>
-                            part.type === "text"
-                              ? { ...part, text: part.text + data.delta }
-                              : part
-                          ),
-                        }
-                      : msg
-                  )
-                );
+                if (data.type === "text-delta" && data.delta) {
+                  // Update the assistant message with the new delta
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === assistantMessageId
+                        ? {
+                            ...msg,
+                            parts: msg.parts?.map((part) =>
+                              part.type === "text"
+                                ? { ...part, text: part.text + data.delta }
+                                : part,
+                            ),
+                          }
+                        : msg,
+                    ),
+                  );
+                }
+              } catch {
+                // Ignore JSON parse errors for non-JSON lines
               }
-            } catch {
-              // Ignore JSON parse errors for non-JSON lines
             }
           }
         }
-      }
-      
-      // Show success message for completed response
-      showSuccessToast("Message sent successfully");
-    } catch (err) {
-      console.error("Error sending message:", err);
-      
-      // Categorize and handle the error
-      if (err instanceof Error) {
-        if (err.name === "AbortError") {
-          showErrorToast(new TimeoutError("Request timed out after 30 seconds"), "Timeout");
-        } else if (err.message.includes("Failed to fetch")) {
-          showErrorToast(new NetworkError("Network connection failed"), "Network Error");
-        } else {
-          showErrorToast(err, "Error");
-        }
-      } else {
-        showErrorToast(new Error("Unknown error occurred"), "Error");
-      }
-      
-      setError(err instanceof Error ? err : new Error("Unknown error"));
 
-      // Remove the assistant message if there was an error
-      setMessages((prev) =>
-        prev.filter((msg) => msg.id !== assistantMessageId)
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedAgent, messages, checkHealth, isOffline]);
+        // Show success message for completed response
+        showSuccessToast("Message sent successfully");
+      } catch (err) {
+        console.error("Error sending message:", err);
+
+        // Categorize and handle the error
+        if (err instanceof Error) {
+          if (err.name === "AbortError") {
+            showErrorToast(
+              new TimeoutError("Request timed out after 30 seconds"),
+              "Timeout",
+            );
+          } else if (err.message.includes("Failed to fetch")) {
+            showErrorToast(
+              new NetworkError("Network connection failed"),
+              "Network Error",
+            );
+          } else {
+            showErrorToast(err, "Error");
+          }
+        } else {
+          showErrorToast(new Error("Unknown error occurred"), "Error");
+        }
+
+        setError(err instanceof Error ? err : new Error("Unknown error"));
+
+        // Remove the assistant message if there was an error
+        setMessages((prev) =>
+          prev.filter((msg) => msg.id !== assistantMessageId),
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [selectedAgent, messages, checkHealth, isOffline],
+  );
 
   const handleFormSubmit = (
     message: PromptInputMessage,
-    event: React.FormEvent<HTMLFormElement>
+    event: React.FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
     const hasText = Boolean(message.text);
@@ -391,7 +427,7 @@ export function FloatingChat({
     const lastUserMessage = messages.filter((msg) => msg.role === "user").pop();
     if (lastUserMessage) {
       const lastText = lastUserMessage.parts?.find(
-        (part) => part.type === "text"
+        (part) => part.type === "text",
       )?.text;
       if (lastText) {
         // Remove the last assistant message if it exists and retry
@@ -421,7 +457,7 @@ export function FloatingChat({
           exit={{ scale: 0.8, opacity: 0, y: 20 }}
           className={cn(
             "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] h-[90vh] sm:w-[600px] sm:h-[750px] lg:w-[700px] lg:h-[800px] z-50 max-w-4xl",
-            className
+            className,
           )}
         >
           <div className="chat-container rounded-xl h-full flex flex-col overflow-hidden">
@@ -463,10 +499,9 @@ export function FloatingChat({
                   messages.map((message: UIMessage) => (
                     <Message from={message.role} key={message.id}>
                       {message.role === "assistant" && (
-                        <MessageAvatar
-                          src={agentAvatar}
-                          name={selectedAgent.name}
-                        />
+                        <Avatar>
+                          <AvatarImage src={agentAvatar} />
+                        </Avatar>
                       )}
                       <MessageContent>
                         {message.role === "user" ? (
@@ -531,7 +566,9 @@ export function FloatingChat({
                         )}
                       </MessageContent>
                       {message.role === "user" && (
-                        <MessageAvatar src={userAvatar} name="User" />
+                        <Avatar>
+                          <AvatarImage src={userAvatar} />
+                        </Avatar>
                       )}
                     </Message>
                   ))
@@ -553,26 +590,31 @@ export function FloatingChat({
                     value={input}
                     onChange={handleInputChange}
                     placeholder="Type your message..."
-                    disabled={isLoading || isHealthLoading || !agentHealth.health?.isOnline}
+                    disabled={
+                      isLoading ||
+                      isHealthLoading ||
+                      !agentHealth.health?.isOnline
+                    }
                   />
                 </PromptInputBody>
-                <PromptInputToolbar>
-                  <PromptInputTools>
-                    <PromptInputActionMenu>
-                      <PromptInputActionMenuTrigger />
-                      <PromptInputActionMenuContent>
-                        <PromptInputActionAddAttachments />
-                      </PromptInputActionMenuContent>
-                    </PromptInputActionMenu>
-                  </PromptInputTools>
-                  <PromptInputSubmit
-                    status={isLoading ? "streaming" : "ready"}
-                    disabled={!input?.trim() || isLoading || isHealthLoading || !agentHealth.health?.isOnline}
-                  />
-                </PromptInputToolbar>
+                <PromptInputTools>
+                  <PromptInputActionMenu>
+                    <PromptInputActionMenuTrigger />
+                    <PromptInputActionMenuContent>
+                      <PromptInputActionAddAttachments />
+                    </PromptInputActionMenuContent>
+                  </PromptInputActionMenu>
+                </PromptInputTools>
+                <PromptInputSubmit
+                  status={isLoading ? "streaming" : "ready"}
+                  disabled={
+                    !input?.trim() ||
+                    isLoading ||
+                    isHealthLoading ||
+                    !agentHealth.health?.isOnline
+                  }
+                />
               </PromptInput>
-
-              
             </div>
           </div>
         </motion.div>
