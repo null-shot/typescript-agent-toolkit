@@ -52,7 +52,7 @@
 
 ## Development Practices
 
-- Use yarn for package management
+- Use pnpm for package management
 - Follow workspaces pattern with packages in `packages/{project}`
 - All code compatible with Cloudflare Workers runtime
 - Use TypeScript for all code with proper typing
@@ -79,4 +79,3 @@
 2. Build all packages: `pnpm build`
 3. Run tests: `pnpm test`
 4. For specific packages, navigate to directory and use specific scripts
-
