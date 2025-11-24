@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useState, useEffect } from "react";
 import { Wifi, WifiOff, Plus, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";

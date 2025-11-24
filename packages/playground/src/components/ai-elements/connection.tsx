@@ -1,3 +1,4 @@
+import React from "react";
 import type { ConnectionLineComponent } from "@xyflow/react";
 
 const HALF = 0.5;

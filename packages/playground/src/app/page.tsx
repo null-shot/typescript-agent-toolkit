@@ -1,3 +1,4 @@
+import React from "react";
 import { AnimatedBackground } from "@/components/animated-background";
 import { FloatingChatButton } from "@/components/floating-chat";
 
