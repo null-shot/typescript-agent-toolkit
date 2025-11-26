@@ -35,6 +35,7 @@ This example demonstrates a CRUD (Create, Read, Update, Delete) application usin
 ### Data Model
 
 The todo items are structured with the following fields:
+
 - `id`: Unique identifier (UUID)
 - `title`: Task title (required)
 - `description`: Detailed description (optional)
@@ -99,18 +100,19 @@ The application includes interactive prompts to help users understand and use th
      - error_type (optional): Get specific help about 'not_found', 'invalid_status', 'invalid_date', or 'other' errors
 
 Example prompt usage:
+
 ```typescript
 // Get general help about listing todos
-const listHelp = await client.getPrompt('list_todos_help');
+const listHelp = await client.getPrompt("list_todos_help");
 
 // Get specific help about date filtering
-const dateFilterHelp = await client.getPrompt('list_todos_help', {
-  filter: 'date'
+const dateFilterHelp = await client.getPrompt("list_todos_help", {
+  filter: "date",
 });
 
 // Get help about updating a specific field
-const updateHelp = await client.getPrompt('update_todo_help', {
-  field: 'status'
+const updateHelp = await client.getPrompt("update_todo_help", {
+  field: "status",
 });
 ```
 
@@ -143,6 +145,7 @@ const updateHelp = await client.getPrompt('update_todo_help', {
 The application uses Cloudflare Workers with the following configuration:
 
 ### wrangler.jsonc
+
 ```jsonc
 {
   "name": "crud-mcp",
@@ -153,24 +156,25 @@ The application uses Cloudflare Workers with the following configuration:
     "bindings": [
       {
         "name": "TODO_MCP_SERVER",
-        "class_name": "TodoMcpServer"
-      }
-    ]
+        "class_name": "TodoMcpServer",
+      },
+    ],
   },
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["TodoMcpServer"]
-    }
+      "new_sqlite_classes": ["TodoMcpServer"],
+    },
   ],
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
-  }
+    "head_sampling_rate": 1,
+  },
 }
 ```
 
 Key Configuration Points:
+
 - **Durable Objects**: The `TodoMcpServer` class is bound as a Durable Object for state management
 - **SQLite Support**: The `TodoMcpServer` class is registered for SQLite functionality via migrations
 - **Observability**: Full request sampling enabled for monitoring and debugging
@@ -208,36 +212,38 @@ await client.connect();
 ### Creating a Todo
 
 ```typescript
-const result = await client.callTool('create_todo', {
+const result = await client.callTool("create_todo", {
   title: "Complete project report",
   description: "Finalize the quarterly project report",
-  due_date: "2024-03-20"
+  due_date: "2024-03-20",
 });
 ```
 
 ### Listing Todos with Filters
 
 ```typescript
-const todos = await client.getResource(new URL(
-  "d1://database/todos?status=in_progress&sort_by=due_date&sort_direction=asc"
-));
+const todos = await client.getResource(
+  new URL(
+    "d1://database/todos?status=in_progress&sort_by=due_date&sort_direction=asc",
+  ),
+);
 ```
 
 ### Getting Today's Tasks
 
 ```typescript
-const todaysTodos = await client.getResource(new URL(
-  "d1://database/todos/today?sort_by=created_at&sort_direction=asc"
-));
+const todaysTodos = await client.getResource(
+  new URL("d1://database/todos/today?sort_by=created_at&sort_direction=asc"),
+);
 ```
 
 ### Updating a Todo
 
 ```typescript
-const result = await client.callTool('updateTodo', {
+const result = await client.callTool("updateTodo", {
   id: "todo-uuid",
   status: "completed",
-  description: "Updated description"
+  description: "Updated description",
 });
 ```
 
@@ -245,28 +251,31 @@ const result = await client.callTool('updateTodo', {
 
 1. Prerequisites:
    - Node.js (v16 or higher)
-   - Yarn or npm
+   - pnpm or npm
    - Wrangler CLI
 
 2. Installation:
+
    ```bash
-   yarn install
+   pnpm install
    ```
 
 3. Development:
+
    ```bash
-   yarn dev
+   pnpm dev
    ```
 
 4. Deployment:
    ```bash
    wrangler login
-   yarn deploy
+   pnpm deploy
    ```
 
 ## Error Handling
 
 The implementation includes comprehensive error handling:
+
 - Input validation using Zod schemas
 - Database operation error handling
 - Detailed error messages and logging
@@ -281,4 +290,5 @@ The implementation includes comprehensive error handling:
 
 ## License
 
-MIT 
+MIT
+
