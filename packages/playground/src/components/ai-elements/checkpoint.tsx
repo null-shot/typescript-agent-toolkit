@@ -33,7 +33,7 @@ export const Checkpoint = ({
 
 export type CheckpointIconProps = LucideProps;
 
-export const CheckpointIcon = ({
+export const CheckpointIcon: React.FC<CheckpointIconProps> = ({
   className,
   children,
   ...props
