@@ -65,3 +65,6 @@ tmp/
 
 data/
 *.db
+
+# Bug fix reports (temporary documentation for PRs)
+BUGFIX_REPORT.md
