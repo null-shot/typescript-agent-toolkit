@@ -30,17 +30,26 @@ export function validateAgentUrl(url: string): { isValid: boolean; error?: strin
 export async function testAgentConnection(url: string): Promise<{ isOnline: boolean; error?: string }> {
   try {
     // Ping the root endpoint expecting 404 (which means agent is alive)
-    await fetch(`${url}/`, {
+    const response = await fetch(`${url}/`, {
       method: "GET",
       signal: AbortSignal.timeout(5000), // 5 second timeout
+      // Don't throw on error status codes
+      // We want to catch network errors, not HTTP status errors
     });
     
     // Agent is alive if we get any response (including 404)
+    // 404 means the server is running but the route doesn't exist (which is expected)
+    // Any HTTP response (even 404, 500, etc.) means the server is running
+    // Only network errors (CORS, timeout, connection refused) mean offline
+    console.log(`Agent health check succeeded for ${url}, status: ${response.status}`);
     return { isOnline: true };
   } catch (error) {
+    // Network errors, timeouts, or CORS issues mean the agent is offline
+    const errorMessage = error instanceof Error ? error.message : "Connection failed";
+    console.warn(`Agent health check failed for ${url}:`, errorMessage, error);
     return { 
       isOnline: false, 
-      error: error instanceof Error ? error.message : "Connection failed" 
+      error: errorMessage
     };
   }
 }

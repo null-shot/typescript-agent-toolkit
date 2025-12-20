@@ -14,8 +14,8 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="input-group"
       role="group"
       className={cn(
-        "group/input-group border-input dark:bg-input/30 relative flex w-full items-center rounded-md border shadow-xs transition-[color,box-shadow] outline-none",
-        "h-9 min-w-0 has-[>textarea]:h-auto",
+        "group/input-group border-input dark:bg-input/30 relative flex w-full items-end rounded-md border shadow-xs transition-[color,box-shadow] outline-none",
+        "h-9 min-w-0 has-[>textarea]:h-auto has-[>textarea]:items-end",
 
         // Variants based on alignment.
         "has-[>[data-align=inline-start]]:[&>input]:pl-2",
@@ -28,6 +28,9 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
 
         // Error state.
         "has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[[data-slot][aria-invalid=true]]:border-destructive dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40",
+
+        // Prevent textarea from overflowing InputGroup boundaries
+        "has-[>textarea]:overflow-x-hidden",
 
         className
       )}
@@ -146,15 +149,38 @@ function InputGroupInput({
 
 function InputGroupTextarea({
   className,
+  style,
   ...props
 }: React.ComponentProps<"textarea">) {
   return (
     <Textarea
       data-slot="input-group-control"
       className={cn(
-        "flex-1 resize-none rounded-none border-0 bg-transparent py-3 shadow-none focus-visible:ring-0 dark:bg-transparent",
+        // Override Textarea's w-full - use flex-1 to work properly in flex container
+        // Remove w-full from Textarea base styles when used in InputGroup
+        // Use !important to ensure w-full is overridden
+        "!w-auto flex-1 resize-none rounded-md border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent",
+        // Add padding so text doesn't stick to edges, but keep it minimal to match InputGroup height
+        // Use px-3 for horizontal padding and py-1.5 for vertical padding (to fit in 36px height)
+        "px-3 py-1.5",
+        // Remove margin
+        "!m-0",
+        // Fixed height matching InputGroup's h-9 (36px) - textarea should NOT grow
+        // Override min-h-16 from base Textarea component
+        "!min-h-9 !h-9",
+        // Prevent horizontal overflow but allow vertical scrolling inside textarea
+        "overflow-x-hidden overflow-y-auto",
+        // Prevent text overflow - break long words and wrap text
+        "break-words",
+        // Ensure textarea stays within InputGroup boundaries - use min-w-0 to prevent flex overflow
+        "min-w-0",
         className
       )}
+      style={{
+        // Disable field-sizing-content to prevent auto-growing
+        fieldSizing: "auto",
+        ...style,
+      }}
       {...props}
     />
   )

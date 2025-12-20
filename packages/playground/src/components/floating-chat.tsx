@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { type Agent, DEFAULT_AGENT } from "@/lib/config";
 import { type UIMessage } from "ai";
 import { useAgentHealth } from "@/hooks/use-agent-health";
+import { useAgentContext } from "@/lib/agent-context";
 import {
   showErrorToast,
   showSuccessToast,
@@ -123,7 +124,56 @@ export function FloatingChat({
     isLoading: isHealthLoading,
     error: healthError,
     checkHealth,
-  } = useAgentHealth(selectedAgent, 0);
+  } = useAgentHealth(selectedAgent, 30000); // Check every 30 seconds
+
+  // Get agent context to sync health updates
+  const agentContext = useAgentContext();
+  const updateAgentHealthRef = React.useRef(agentContext.updateAgentHealth);
+  
+  // Keep ref updated
+  React.useEffect(() => {
+    updateAgentHealthRef.current = agentContext.updateAgentHealth;
+  }, [agentContext.updateAgentHealth]);
+
+  // Sync health updates from useAgentHealth to context and local state
+  // Use ref to track last synced health to prevent infinite loops
+  const lastSyncedHealthRef = React.useRef<{ isOnline?: boolean; lastChecked?: number } | null>(null);
+
+  useEffect(() => {
+    if (agentHealth?.health && selectedAgent) {
+      const newHealth = agentHealth.health;
+      const lastSynced = lastSyncedHealthRef.current;
+      
+      // Only update if health actually changed
+      if (!lastSynced || 
+          lastSynced.isOnline !== newHealth.isOnline ||
+          lastSynced.lastChecked !== newHealth.lastChecked) {
+        // Update context
+        updateAgentHealthRef.current(selectedAgent.id, newHealth);
+        
+        // Update local selectedAgent state so AgentSelector shows correct health
+        setSelectedAgent(prev => ({
+          ...prev,
+          health: newHealth,
+          lastChecked: newHealth.lastChecked,
+        }));
+        
+        lastSyncedHealthRef.current = {
+          isOnline: newHealth.isOnline,
+          lastChecked: newHealth.lastChecked,
+        };
+      }
+    }
+  }, [agentHealth?.health?.isOnline, agentHealth?.health?.lastChecked, selectedAgent?.id]);
+
+  // Force health check when chat opens
+  useEffect(() => {
+    if (isOpen) {
+      checkHealth(true).catch(() => {
+        // Ignore errors, health check will retry
+      });
+    }
+  }, [isOpen, checkHealth]);
 
   // Random avatars
   const [userAvatar] = useState(
@@ -326,43 +376,31 @@ export function FloatingChat({
         }
 
         const decoder = new TextDecoder();
-        let buffer = "";
+        let accumulatedText = "";
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // Keep incomplete line in buffer
+          // Decode the chunk
+          const chunk = decoder.decode(value, { stream: true });
+          accumulatedText += chunk;
 
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-
-                if (data.type === "text-delta" && data.delta) {
-                  // Update the assistant message with the new delta
-                  setMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === assistantMessageId
-                        ? {
-                            ...msg,
-                            parts: msg.parts?.map((part) =>
-                              part.type === "text"
-                                ? { ...part, text: part.text + data.delta }
-                                : part,
-                            ),
-                          }
-                        : msg,
+          // Update the message with accumulated text
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? {
+                    ...msg,
+                    parts: msg.parts?.map((part) =>
+                      part.type === "text"
+                        ? { ...part, text: accumulatedText }
+                        : part,
                     ),
-                  );
-                }
-              } catch {
-                // Ignore JSON parse errors for non-JSON lines
-              }
-            }
-          }
+                  }
+                : msg,
+            ),
+          );
         }
 
         // Show success message for completed response
@@ -457,13 +495,21 @@ export function FloatingChat({
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.8, opacity: 0, y: 20 }}
           className={cn(
-            "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] h-[90vh] sm:w-[600px] sm:h-[750px] lg:w-[700px] lg:h-[800px] z-50 max-w-4xl",
+            // Базовые стили позиционирования - одинаковые отступы от границ во всех режимах
+            "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] z-50",
+            // Мобильный режим (до 1024px): без ограничения max-width
+            "h-[90vh]",
+            // Большой экран (от 1024px): фиксированная ширина (уменьшена для более компактного вида)
+            "lg:w-[515px] lg:h-[800px]",
+            // На мобильных и средних экранах (до 1024px) добавляем отступ снизу 60px, чтобы не перекрывало Next.js Dev Tools
+            // Также убираем центрирование по вертикали и ограничиваем высоту
+            "max-lg:top-auto max-lg:bottom-[60px] max-lg:translate-y-0 max-lg:h-[calc(100vh-110px)]",
             className,
           )}
         >
           <div className="chat-container rounded-xl h-full flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-t-xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-t-xl">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <AgentSelector
                   selectedAgent={selectedAgent}
@@ -486,10 +532,10 @@ export function FloatingChat({
 
             {/* Chat Messages using AI Elements */}
             <Conversation
-              className="flex-1 chat-messages"
+              className="flex-1 chat-messages overflow-y-auto"
               style={{ height: "auto" }}
             >
-              <ConversationContent>
+              <ConversationContent className="!px-6 !pt-6 !pb-4 min-h-full">
                 {messages.length === 0 ? (
                   <ConversationEmptyState
                     icon={<MessageCircle className="h-12 w-12" />}
@@ -497,91 +543,111 @@ export function FloatingChat({
                     description={`Connected to ${selectedAgent.name}`}
                   />
                 ) : (
-                  messages.map((message: UIMessage) => (
-                    <Message from={message.role} key={message.id}>
-                      {message.role === "assistant" && (
-                        <Avatar>
-                          <AvatarImage src={agentAvatar} />
-                        </Avatar>
-                      )}
-                      <MessageContent>
-                        {message.role === "user" ? (
-                          <div className="rounded-lg px-4 py-3 text-sm leading-relaxed message-user rounded-br-sm">
-                            <div className="whitespace-pre-wrap break-words text-white">
-                              {message.parts
-                                ?.filter((part) => part.type === "text")
-                                ?.map((part, index) => (
-                                  <span key={index}>{part.text}</span>
-                                ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            {message.parts?.map((part, index: number) => {
-                              switch (part.type) {
-                                case "text":
-                                  return (
-                                    <Response key={index} className="text-left">
-                                      {part.text}
-                                    </Response>
-                                  );
-                                default:
-                                  // Handle tool calls with AI Elements Tool component
-                                  if (isToolUIPart(part)) {
-                                    return (
-                                      <Tool
-                                        key={index}
-                                        defaultOpen={
-                                          part.state === "output-available" ||
-                                          part.state === "output-error"
-                                        }
-                                      >
-                                        <ToolHeader
-                                          type={
-                                            part.type.startsWith("tool-")
-                                              ? (part.type as `tool-${string}`)
-                                              : `tool-${part.type}`
-                                          }
-                                          state={
-                                            part.state || "input-streaming"
-                                          }
-                                        />
-                                        <ToolContent>
-                                          {part.input && (
-                                            <ToolInput input={part.input} />
-                                          )}
-                                          {(part.output || part.errorText) && (
-                                            <ToolOutput
-                                              output={part.output}
-                                              errorText={part.errorText}
-                                            />
-                                          )}
-                                        </ToolContent>
-                                      </Tool>
-                                    );
-                                  }
-                                  return null;
-                              }
-                            })}
-                          </>
+                  messages.map((message: UIMessage) => {
+                    const isUser = message.role === "user";
+                    return (
+                      <Message 
+                        from={message.role} 
+                        key={message.id} 
+                        className={cn(
+                          "!flex-row items-end gap-3 mb-5",
+                          isUser ? "justify-end" : "justify-start"
                         )}
-                      </MessageContent>
-                      {message.role === "user" && (
-                        <Avatar>
-                          <AvatarImage src={userAvatar} />
-                        </Avatar>
-                      )}
-                    </Message>
-                  ))
+                      >
+                        {!isUser && (
+                          <Avatar className="shrink-0 order-1">
+                            <AvatarImage src={agentAvatar} />
+                          </Avatar>
+                        )}
+                        <MessageContent className={cn(
+                          "max-w-[70%] min-w-0",
+                          isUser ? "order-1" : "order-2"
+                        )}>
+                          {isUser ? (
+                            <div className="rounded-lg px-4 py-3 text-sm leading-relaxed message-user rounded-br-sm">
+                              <div className="whitespace-pre-wrap break-words text-white">
+                                {message.parts
+                                  ?.filter((part) => part.type === "text")
+                                  ?.map((part, index) => (
+                                    <span key={index}>{part.text}</span>
+                                  ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              {message.parts?.map((part, index: number) => {
+                                switch (part.type) {
+                                  case "text":
+                                    return (
+                                      <div 
+                                        key={index}
+                                        className="rounded-lg px-4 py-3 text-sm leading-relaxed bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-bl-sm"
+                                      >
+                                        <Response 
+                                          className="text-left break-words prose prose-sm dark:prose-invert max-w-none"
+                                        >
+                                          {part.text}
+                                        </Response>
+                                      </div>
+                                    );
+                                  default:
+                                    // Handle tool calls with AI Elements Tool component
+                                    if (isToolUIPart(part)) {
+                                      return (
+                                        <Tool
+                                          key={index}
+                                          defaultOpen={
+                                            part.state === "output-available" ||
+                                            part.state === "output-error"
+                                          }
+                                        >
+                                          <ToolHeader
+                                            type={
+                                              part.type.startsWith("tool-")
+                                                ? (part.type as `tool-${string}`)
+                                                : `tool-${part.type}`
+                                            }
+                                            state={
+                                              part.state || "input-streaming"
+                                            }
+                                          />
+                                          <ToolContent>
+                                            {part.input && (
+                                              <ToolInput input={part.input} />
+                                            )}
+                                            {(part.output || part.errorText) && (
+                                              <ToolOutput
+                                                output={part.output}
+                                                errorText={part.errorText}
+                                              />
+                                            )}
+                                          </ToolContent>
+                                        </Tool>
+                                      );
+                                    }
+                                    return null;
+                                }
+                              })}
+                            </>
+                          )}
+                        </MessageContent>
+                        {isUser && (
+                          <Avatar className="shrink-0 order-2">
+                            <AvatarImage src={userAvatar} />
+                          </Avatar>
+                        )}
+                      </Message>
+                    );
+                  })
                 )}
               </ConversationContent>
               <ConversationScrollButton />
             </Conversation>
 
             {/* Chat Input using AI Elements PromptInput */}
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-b-xl">
-              <PromptInput onSubmit={handleFormSubmit} className="mt-4">
-                <PromptInputBody>
+            <div className="px-6 py-5 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-b-xl">
+              <PromptInput onSubmit={handleFormSubmit} className="gap-0">
+                <PromptInputBody className="gap-2">
                   <PromptInputAttachments>
                     {(attachment) => (
                       <PromptInputAttachment data={attachment} />
@@ -593,8 +659,7 @@ export function FloatingChat({
                     placeholder="Type your message..."
                     disabled={
                       isLoading ||
-                      isHealthLoading ||
-                      !agentHealth.health?.isOnline
+                      (agentHealth.health !== undefined && !agentHealth.health.isOnline)
                     }
                   />
                 </PromptInputBody>
@@ -611,8 +676,7 @@ export function FloatingChat({
                   disabled={
                     !input?.trim() ||
                     isLoading ||
-                    isHealthLoading ||
-                    !agentHealth.health?.isOnline
+                    (agentHealth.health !== undefined && !agentHealth.health.isOnline)
                   }
                 />
               </PromptInput>

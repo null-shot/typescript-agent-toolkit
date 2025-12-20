@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useState, useEffect } from "react";
-import { Wifi, WifiOff, Plus, Circle } from "lucide-react";
+import { Wifi, WifiOff, Plus, Circle, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -16,6 +16,7 @@ import { type Agent } from "@/lib/config";
 import { AddAgentModal } from "./add-agent-modal";
 import { useAgentSelection, useAgentManagement } from "@/lib/agent-context";
 import { getAgentStatusMessage } from "@/lib/agent-health";
+import * as SelectPrimitive from "@radix-ui/react-select";
 
 export interface AgentSelectorProps {
   selectedAgent: Agent;
@@ -39,6 +40,7 @@ export function AgentSelector({
   const { refreshAgents } = useAgentManagement();
 
   // Use the selected agent from props or context (props takes precedence)
+  // Props agent has priority because it's updated with latest health from FloatingChat
   const currentAgent = selectedAgent || contextSelectedAgent;
 
   // Refresh agent health on mount
@@ -48,8 +50,13 @@ export function AgentSelector({
   }, []); // Empty dependency array to run only on mount
 
   // Find health status for selected agent
-  const selectedAgentHealth = currentAgent?.health;
+  // Use health from props agent if available (it's more up-to-date), otherwise use context agent
+  const selectedAgentHealth = selectedAgent?.health || currentAgent?.health;
+  // Only show disconnected if health has been checked and agent is offline
+  // Don't show disconnected if health check hasn't been performed yet
   const isConnected = selectedAgentHealth?.isOnline ?? false;
+  const healthChecked = selectedAgentHealth !== undefined;
+  const showDisconnected = healthChecked && !isConnected;
 
   const handleValueChange = (value: string) => {
     if (value === "__add_agent__") {
@@ -78,35 +85,53 @@ export function AgentSelector({
 
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-        <div className="flex items-center gap-1">
-          {isConnected ? (
-            <Wifi className="h-4 w-4 text-green-400" />
-          ) : (
-            <WifiOff className="h-4 w-4 text-red-400" />
-          )}
-          <span className="hidden sm:inline">
-            {isConnected ? "Connected" : "Disconnected"}
-          </span>
+      {/* Only show disconnected status if health has been checked and agent is offline */}
+      {showDisconnected && (
+        <div className="flex items-center gap-2 text-sm text-red-500 dark:text-red-400">
+          <div className="flex items-center gap-1">
+            <WifiOff className="h-4 w-4" />
+            <span className="hidden sm:inline">Disconnected</span>
+          </div>
         </div>
-      </div>
+      )}
 
       <Select value={currentAgent?.id} onValueChange={handleValueChange}>
-        <SelectTrigger className="w-[240px] bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white shadow-sm">
-          <SelectValue placeholder="Select an agent" />
+        <SelectTrigger className="w-[200px] bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white shadow-sm">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {currentAgent && currentAgent.health?.isOnline && (
+              <Circle
+                className="h-2 w-2 text-green-400 shrink-0"
+                fill="currentColor"
+              />
+            )}
+            <SelectValue placeholder="Select an agent" className="truncate" />
+          </div>
         </SelectTrigger>
         <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
           {agents.map((agent) => (
-            <SelectItem
+            <SelectPrimitive.Item
               key={agent.id}
               value={agent.id}
-              className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
               disabled={!agent.health?.isOnline}
+              className={cn(
+                "cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 py-3 relative flex w-full items-center gap-2 rounded-sm pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                !agent.health?.isOnline && "opacity-50"
+              )}
             >
-              <div className="flex items-center gap-2">
-                <div className="flex items-center">
+              <span className="absolute right-2 flex size-3.5 items-center justify-center">
+                <SelectPrimitive.ItemIndicator>
+                  <Check className="size-4" />
+                </SelectPrimitive.ItemIndicator>
+              </span>
+              {/* Text for SelectValue - only name, hidden in dropdown */}
+              <SelectPrimitive.ItemText className="sr-only">
+                {agent.name}
+              </SelectPrimitive.ItemText>
+              {/* Visible content in dropdown */}
+              <div className="flex items-start gap-3 w-full">
+                <div className="flex items-center pt-1">
                   <Circle
-                    className={`h-2 w-2 ${
+                    className={`h-2.5 w-2.5 ${
                       agent.health?.isOnline
                         ? agent.health.responseTime &&
                           agent.health.responseTime > 2000
@@ -117,31 +142,31 @@ export function AgentSelector({
                     fill="currentColor"
                   />
                 </div>
-                <div className="flex flex-col">
+                <div className="flex flex-col gap-1 flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900 dark:text-white">
+                    <span className="font-semibold text-sm text-gray-900 dark:text-white">
                       {agent.name}
                     </span>
                     {!agent.health?.isOnline && (
                       <Badge
                         variant="destructive"
-                        className="text-xs py-0 px-1 h-4"
+                        className="text-xs py-0 px-1.5 h-5"
                       >
                         Offline
                       </Badge>
                     )}
                   </div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[180px]">
+                  <span className="text-xs text-gray-600 dark:text-gray-400 truncate">
                     {agent.url.replace(/^https?:\/\//, "")}
                   </span>
                   {agent.health && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-gray-500">
                       {getAgentStatusMessage(agent)}
                     </span>
                   )}
                 </div>
               </div>
-            </SelectItem>
+            </SelectPrimitive.Item>
           ))}
 
           {/* Add Agent Option */}

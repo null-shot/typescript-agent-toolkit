@@ -755,7 +755,7 @@ export const PromptInput = ({
         onSubmit={handleSubmit}
         {...props}
       >
-        <InputGroup className="overflow-hidden">{children}</InputGroup>
+        <InputGroup className="has-[>textarea]:overflow-x-hidden">{children}</InputGroup>
       </form>
     </>
   );
@@ -866,7 +866,13 @@ export const PromptInputTextarea = ({
 
   return (
     <InputGroupTextarea
-      className={cn("field-sizing-content max-h-48 min-h-16", className)}
+      className={cn(
+        "field-sizing-content min-h-16 max-h-[40vh]",
+        // Максимальная высота 40vh, затем появляется прокрутка внутри textarea
+        // Убеждаемся, что placeholder центрирован вертикально
+        "leading-6",
+        className
+      )}
       name="message"
       onCompositionEnd={() => setIsComposing(false)}
       onCompositionStart={() => setIsComposing(true)}
@@ -917,7 +923,7 @@ export const PromptInputTools = ({
   className,
   ...props
 }: PromptInputToolsProps) => (
-  <div className={cn("flex items-center gap-1", className)} {...props} />
+  <div className={cn("flex items-center gap-1 shrink-0 self-end", className)} {...props} />
 );
 
 export type PromptInputButtonProps = ComponentProps<typeof InputGroupButton>;
@@ -1009,7 +1015,7 @@ export const PromptInputSubmit = ({
   return (
     <InputGroupButton
       aria-label="Submit"
-      className={cn(className)}
+      className={cn("shrink-0", className)}
       size={size}
       type="submit"
       variant={variant}

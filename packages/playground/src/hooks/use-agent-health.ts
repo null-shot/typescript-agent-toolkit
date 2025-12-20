@@ -1,6 +1,7 @@
 // React hook for agent health monitoring
 
 import { useState, useEffect, useCallback } from "react";
+import * as React from "react";
 import { Agent } from "@/lib/config";
 import { checkAgentHealth, checkAgentsHealth } from "@/lib/agent-health";
 
@@ -16,6 +17,18 @@ export function useAgentHealth(agent: Agent, interval: number = 30000) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Store agent URL and ID in refs to avoid recreating callbacks when agent object changes
+  const agentUrlRef = React.useRef(agent.url);
+  const agentIdRef = React.useRef(agent.id);
+  const agentRef = React.useRef(agent);
+  
+  // Update refs when agent changes (but only URL/ID, not health)
+  React.useEffect(() => {
+    agentUrlRef.current = agent.url;
+    agentIdRef.current = agent.id;
+    agentRef.current = agent;
+  }, [agent.url, agent.id]);
+
   /**
    * Manually trigger a health check
    */
@@ -24,7 +37,8 @@ export function useAgentHealth(agent: Agent, interval: number = 30000) {
     setError(null);
     
     try {
-      const updatedAgent = await checkAgentHealth(agent, force);
+      // Use current agent from ref to avoid dependency on changing agent object
+      const updatedAgent = await checkAgentHealth(agentRef.current, force);
       setHealth(updatedAgent);
       return updatedAgent;
     } catch (err) {
@@ -34,21 +48,45 @@ export function useAgentHealth(agent: Agent, interval: number = 30000) {
     } finally {
       setIsLoading(false);
     }
-  }, [agent]);
+  }, []); // No dependencies - use refs instead
 
   // Set up periodic health checks
+  // Only recreate interval when URL or ID changes, not when health updates
   useEffect(() => {
     if (interval <= 0) return;
 
+    let isMounted = true;
+
     // Check immediately on mount
-    checkHealth(false);
+    const performCheck = async () => {
+      try {
+        const updatedAgent = await checkAgentHealth(agentRef.current, false);
+        if (isMounted) {
+          setHealth(updatedAgent);
+        }
+      } catch (err) {
+        if (isMounted) {
+          const errorMessage = err instanceof Error ? err.message : "Failed to check agent health";
+          setError(errorMessage);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    performCheck();
 
     const intervalId = setInterval(() => {
-      checkHealth(false);
+      performCheck();
     }, interval);
 
-    return () => clearInterval(intervalId);
-  }, [checkHealth, interval]);
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [agent.url, agent.id, interval]); // Only depend on stable agent properties (URL and ID)
 
   return {
     health,

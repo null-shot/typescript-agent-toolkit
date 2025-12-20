@@ -233,6 +233,8 @@ export class SimplePromptAgent extends AiSdkAgent<Env> {
 			},
 		});
 
+		// Use toTextStreamResponse() which returns SSE format
+		// The response format is: 0:"text" or data: {"type":"text-delta","delta":"..."}
 		return result.toTextStreamResponse();
 	}
 }

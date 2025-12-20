@@ -11,12 +11,13 @@ export default function Home() {
       {/* Main Content */}
       <div className="relative z-10 min-h-screen flex items-center justify-center">
         <div className="text-center text-white">
-          <h1 className="text-4xl sm:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-white via-white/90 to-white/70">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white via-white/90 to-white/70">
             AI Agent Playground
           </h1>
-          <p className="text-lg sm:text-xl mb-8 text-white/80 max-w-2xl mx-auto px-4">
-            Connect and chat with your AI agents in a beautiful, responsive
-            interface.
+          <p className="text-sm sm:text-base mb-6 text-white/80 max-w-2xl mx-auto px-4">
+            Connect and chat with your AI agents
+            <br />
+            in a beautiful, responsive interface.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-center px-4">
