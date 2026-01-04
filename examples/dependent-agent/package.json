@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",
-    "dev": "nullshot dev",
-    "start": "wrangler dev",
+    "dev": "concurrently \"nullshot dev\" \"cd ../../packages/playground && NEXT_PUBLIC_DEFAULT_AGENT_NAME='Dependent Agent' NEXT_PUBLIC_DEFAULT_AGENT_URL='http://localhost:8787' pnpm dev\"",
+    "start": "wrangler dev --local",
+    "dev:agent-only": "nullshot dev",
     "cf-typegen": "wrangler types",
-    "dev:wrangler": "wrangler dev",
+    "dev:wrangler": "wrangler dev --local",
     "postinstall": "nullshot install"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@nullshot/cli": "workspace:*",
     "@types/node": "catalog:",
+    "concurrently": "^9.1.2",
     "typescript": "catalog:",
     "wrangler": "catalog:"
   },

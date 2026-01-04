@@ -52,6 +52,7 @@
 	 */
 	"vars": {
 		"AI_PROVIDER": "workers-ai",
+		"USE_MOCK_AI": "false",
 		"OPEN_AI_API_KEY": "",
 		"ANTHROPIC_API_KEY": "",
 		"CLOUDFLARE_ACCOUNT_ID": "",

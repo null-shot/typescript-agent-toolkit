@@ -4,8 +4,8 @@
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
-		"dev": "concurrently \"wrangler dev\" \"cd ../crud-mcp && npm run start -- --port 8788\" \"cd ../playground-showcase && npm run dev\"",
-		"start": "wrangler dev",
+		"dev": "concurrently \"wrangler dev --local --port 8787\" \"cd ../crud-mcp && npm run start -- --port 8788\" \"cd ../../packages/playground && NEXT_PUBLIC_DEFAULT_AGENT_NAME='Simple Prompt Agent' NEXT_PUBLIC_DEFAULT_AGENT_URL='http://localhost:8787' pnpm dev\"",
+		"start": "wrangler dev --local --port 8787",
 		"test": "echo 'Tests temporarily excluded'",
 		"cf-typegen": "wrangler types",
 		"build": "wrangler build"

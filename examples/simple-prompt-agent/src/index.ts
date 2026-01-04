@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { applyPermissionlessAgentSessionRouter } from '@nullshot/agent';
 import { ToolboxService } from '@nullshot/agent/services';
 import { LanguageModel, stepCountIs, type Provider } from 'ai';
@@ -160,10 +161,33 @@ function createCustomWorkersAI(binding: Ai): Provider {
 
 // Use type assertion to make Hono app compatible with AgentRouterBuilder
 const app = new Hono<{ Bindings: Env }>();
+app.use('*', cors());
+
+// Root endpoint - provide agent metadata
+app.get('/', (c) => {
+	return c.json({
+		name: 'Simple Prompt Agent',
+		version: '0.1.0',
+		description: 'Simple agent with prompt-based interactions and MCP tool support',
+		endpoints: {
+			'/': 'Agent metadata (this endpoint)',
+			'/agent/chat/:sessionId': 'Chat endpoint for agent interactions',
+		},
+		features: ['Prompt-based interactions', 'MCP tool support', 'Multiple AI provider support'],
+	});
+});
+
 applyPermissionlessAgentSessionRouter(app);
 
 export class SimplePromptAgent extends AiSdkAgent<Env> {
 	constructor(state: DurableObjectState, env: Env) {
+		// Mock mode: use dummy model for local testing without API keys
+		if (env.USE_MOCK_AI === 'true') {
+			const mockModel = {} as any;
+			super(state, env, mockModel, []);
+			return;
+		}
+
 		let provider: Provider;
 		let model: LanguageModel;
 		// This is just an example, ideally you only want ot inlcude models that you plan to use for your agent itself versus multiple models
@@ -221,6 +245,20 @@ export class SimplePromptAgent extends AiSdkAgent<Env> {
 
 
 	async processMessage(sessionId: string, messages: AIUISDKMessage): Promise<Response> {
+		// Mock mode: return deterministic response without calling AI
+		if (this.env.USE_MOCK_AI === 'true') {
+			const last = messages.messages[messages.messages.length - 1];
+			const userText = typeof last?.content === 'string' ? last.content : 'Hello';
+			const reply = `Mock response: I received your message "${userText}". This is a mock response for local testing without API keys.`;
+			// Return as SSE format to match expected format
+			return new Response(`0:"${reply}"`, { 
+				headers: { 
+					'Content-Type': 'text/plain; charset=utf-8',
+					'X-Session-Id': sessionId
+				} 
+			});
+		}
+
 		// Use the protected streamTextWithMessages method - model is handled automatically by the agent
 		const result = await this.streamTextWithMessages(sessionId, messages.messages, {
 			system: 'You will use tools to help manage and mark off tasks on a todo list.',

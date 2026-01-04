@@ -1,0 +1,4 @@
+AI_PROVIDER=anthropic
+AI_PROVIDER_API_KEY=sk-ant-key-here
+MODEL_ID=claude-sonnet-4-20250514
+

@@ -26,7 +26,7 @@ Showcase of using Cloudflare Queues with the NullShot Agent Toolkit:
 
 Run modes
 
-- Local (Free): Uses Miniflare’s local queue simulation. Workers AI still requires login to produce real model output; without login you’ll see “Not logged in” in logs, but the queue flow runs end-to-end.
+- Local (Free): Uses Miniflare's local queue simulation. Workers AI still requires login to produce real model output; without login you'll see "Not logged in" in logs, but the queue flow runs end-to-end.
   - Tip: Set `USE_MOCK_AI=true` in `.dev.vars` to run locally without a Cloudflare account. The agent returns a deterministic mock response.
 - Cloud (Paid): Uses real Cloudflare Queues and Workers AI on your account. Requires a paid Workers plan for Queues.
 
@@ -36,7 +36,31 @@ Run modes
 pnpm install
 ```
 
-2. Create a Queue and (optionally) a DLQ (Cloud only, Paid)
+2. Set up environment variables (optional for local development):
+
+   ```bash
+   cp .dev.vars.example .dev.vars
+   ```
+
+   Then edit `.dev.vars` if needed. By default, `USE_MOCK_AI=true` is set for local development without a Cloudflare account.
+
+3. Start development
+
+```bash
+# Start agent + Playground UI (automatically connects to agent on port 8787)
+pnpm dev
+
+# Start only the agent (without UI)
+pnpm dev:agent-only
+```
+
+The development setup automatically runs:
+- Agent service on port 8787 (runs in local mode, no Cloudflare login required)
+- Playground UI on port 3000 (automatically connects to the agent)
+
+**Note**: The agent runs with `--local` flag, so no Cloudflare login is required for local development. Workers AI may still require authentication for real model output, but the queue flow works end-to-end without login.
+
+4. Create a Queue and (optionally) a DLQ (Cloud only, Paid)
 
 Cloud deployment only. Not required for local dev (--local). Requires a paid Workers plan and `npx wrangler login` first.
 
@@ -48,14 +72,14 @@ npx wrangler queues create request-queue
 npx wrangler queues create request-queue-dlq
 ```
 
-3. Configure `wrangler.jsonc`
+5. Configure `wrangler.jsonc`
 
-Edit the queue names if you used different names in step 2. The default config expects:
+Edit the queue names if you used different names in step 4. The default config expects:
 
 - producer/consumer queue: `request-queue`
 - dead letter queue: `request-queue-dlq`
 
-4. Authenticate and run with real services
+6. Authenticate and run with real services
 
 ```bash
 # Login interactively (recommended for dev)
@@ -71,7 +95,7 @@ npx wrangler dev --remote
 npx wrangler deploy
 ```
 
-5. Privacy and OSS hygiene
+6. Privacy and OSS hygiene
 
 - Never commit secrets or tokens. Use Wrangler secrets or environment variables.
 - This repo example does not include any secrets. Avoid adding `.dev.vars` to git.
