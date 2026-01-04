@@ -152,10 +152,19 @@ export async function refreshMultipleAgentsHealth(
  * Create a default agent configuration
  */
 export function createDefaultAgent(overrides: Partial<Agent> = {}): Agent {
+  // Get default values from environment or use fallbacks
+  const defaultUrl = typeof window !== "undefined" 
+    ? (process.env.NEXT_PUBLIC_DEFAULT_AGENT_URL || "http://localhost:8787")
+    : (process.env.NEXT_PUBLIC_DEFAULT_AGENT_URL || "http://localhost:8787");
+  
+  const defaultName = typeof window !== "undefined"
+    ? (process.env.NEXT_PUBLIC_DEFAULT_AGENT_NAME || "Default Agent")
+    : (process.env.NEXT_PUBLIC_DEFAULT_AGENT_NAME || "Default Agent");
+  
   return {
     id: generateAgentId("default"),
-    name: "Default Agent",
-    url: "http://localhost:8787",
+    name: defaultName,
+    url: defaultUrl,
     health: {
       isOnline: false,
       lastChecked: 0,

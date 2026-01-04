@@ -7,7 +7,7 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { Agent, AgentHealthStatus, DEFAULT_AGENT } from "@/lib/config";
+import { Agent, AgentHealthStatus, DEFAULT_AGENT, getDefaultAgent, loadRuntimeConfig } from "@/lib/config";
 import { saveCustomAgent, validateAgentUrl } from "@/lib/agent-storage";
 import { createAgentStorage, setupStorageSync } from "@/lib/agent-persistence";
 
@@ -28,18 +28,27 @@ type AgentContextAction =
       type: "UPDATE_AGENT_HEALTH";
       payload: { id: string; health: AgentHealthStatus };
     }
+  | {
+      type: "UPDATE_AGENT_NAME";
+      payload: { id: string; name: string };
+    }
   | { type: "SELECT_AGENT"; payload: string }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_ERROR"; payload: string | null }
   | { type: "RESET_AGENTS" };
 
-// Initial state
-const initialState: AgentContextState = {
-  agents: [DEFAULT_AGENT],
-  selectedAgentId: DEFAULT_AGENT.id,
-  isLoading: false,
-  error: null,
+// Initial state - use getDefaultAgent() to read env vars dynamically
+const getInitialState = (): AgentContextState => {
+  const defaultAgent = getDefaultAgent();
+  return {
+    agents: [defaultAgent],
+    selectedAgentId: defaultAgent.id,
+    isLoading: false,
+    error: null,
+  };
 };
+
+const initialState: AgentContextState = getInitialState();
 
 // Agent reducer function
 function agentReducer(
@@ -146,10 +155,32 @@ export function AgentProvider({
   initialAgents,
   persistToLocalStorage = true,
 }: AgentProviderProps) {
+  // Use getDefaultAgent() to read env vars dynamically on mount
+  const defaultAgent = React.useMemo(() => getDefaultAgent(), []);
+  
+  // Load runtime config on mount (client-side only)
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      console.log("[AgentProvider] Loading runtime config...");
+      loadRuntimeConfig().then(() => {
+        // Small delay to ensure cache is updated
+        setTimeout(() => {
+          // Update agent with runtime config
+          const updatedAgent = getDefaultAgent();
+          console.log("[AgentProvider] Loaded runtime config, updating agent to:", updatedAgent.name, "URL:", updatedAgent.url);
+          // Always update to ensure we have the latest config
+          dispatch({ type: "SET_AGENTS", payload: [updatedAgent] });
+          dispatch({ type: "SELECT_AGENT", payload: updatedAgent.id });
+        }, 100);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  
   const [state, dispatch] = useReducer(agentReducer, {
     ...initialState,
-    agents: initialAgents || [DEFAULT_AGENT],
-    selectedAgentId: initialAgents?.[0]?.id || DEFAULT_AGENT.id,
+    agents: initialAgents || [defaultAgent],
+    selectedAgentId: initialAgents?.[0]?.id || defaultAgent.id,
   });
 
   // Create storage instance
@@ -162,6 +193,39 @@ export function AgentProvider({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persistToLocalStorage, storage]);
+
+  // Refresh agents health on mount and when agents change
+  useEffect(() => {
+    // When starting up, agents might not be ready yet (especially when using concurrently)
+    // Do multiple retries with increasing delays to give agents time to start
+    let retryCount = 0;
+    const maxRetries = 4; // Try 4 times over ~15 seconds
+    
+    const attemptRefresh = () => {
+      refreshAgents().then(() => {
+        // Check if any agent is still offline
+        const hasOfflineAgents = state.agents.some(agent => !agent.health?.isOnline);
+        
+        // If agents are offline and we haven't exhausted retries, try again
+        if (hasOfflineAgents && retryCount < maxRetries) {
+          retryCount++;
+          // Exponential backoff: 3s, 5s, 7s, 10s
+          const delay = retryCount === 1 ? 3000 : retryCount === 2 ? 5000 : retryCount === 3 ? 7000 : 10000;
+          setTimeout(() => {
+            attemptRefresh();
+          }, delay);
+        }
+      });
+    };
+    
+    // Start checking after initial delay (give agents time to start)
+    const timeoutId = setTimeout(() => {
+      attemptRefresh();
+    }, 3000); // 3 second initial delay
+    
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.agents.length]); // Only depend on agents count to avoid infinite loops
 
   // Save agents to storage when they change
   useEffect(() => {
@@ -189,10 +253,17 @@ export function AgentProvider({
       const storedAgents = storage.loadAgents();
       if (storedAgents.length > 0) {
         dispatch({ type: "SET_AGENTS", payload: storedAgents });
+        // Refresh health after loading from storage
+        setTimeout(() => refreshAgents(), 500);
+      } else {
+        // If no stored agents, use DEFAULT_AGENT and refresh its health
+        setTimeout(() => refreshAgents(), 500);
       }
     } catch (error) {
       console.error("Failed to load agents from storage:", error);
       dispatch({ type: "SET_ERROR", payload: "Failed to load agents" });
+      // Still try to refresh default agent
+      setTimeout(() => refreshAgents(), 500);
     }
   };
 
@@ -278,32 +349,50 @@ export function AgentProvider({
     dispatch({ type: "SET_LOADING", payload: true });
 
     try {
-      const { testAgentConnection } = await import("@/lib/agent-storage");
+      const { testAgentConnection, detectAgentName } = await import("@/lib/agent-storage");
 
-      // Check health for all agents
+      // Check health for all agents and try to detect names
       const healthChecks = await Promise.all(
         state.agents.map(async (agent) => {
-          const { isOnline, error } = await testAgentConnection(agent.url);
+          const { isOnline, error, metadata } = await testAgentConnection(agent.url);
+          
+          // Try to detect agent name from metadata or URL
+          let detectedName = agent.name;
+          if (isOnline) {
+            // Always prefer metadata name if available and different from current
+            if (metadata?.name && metadata.name !== agent.name && metadata.name !== "Default Agent") {
+              detectedName = metadata.name;
+            } else if (agent.name === "Default Agent" || agent.name === "Local Agent" || agent.name.startsWith("Localhost Agent")) {
+              // Try to detect from URL/port if name is still generic
+              const autoName = await detectAgentName(agent.url);
+              if (autoName && autoName !== "Default Agent" && autoName !== agent.name) {
+                detectedName = autoName;
+              }
+            }
+          }
+          
           return {
             id: agent.id,
+            name: detectedName !== agent.name ? detectedName : undefined, // Only update if changed
             health: {
               isOnline,
               lastChecked: Date.now(),
-              error,
+              error: isOnline ? undefined : error, // Only show error if agent is offline
             } as AgentHealthStatus,
           };
         }),
       );
 
-      // Update health for all agents
-      healthChecks.forEach(({ id, health }) => {
+      // Update health and names for all agents
+      healthChecks.forEach(({ id, health, name }) => {
         updateAgentHealth(id, health);
+        if (name) {
+          dispatch({ type: "UPDATE_AGENT_NAME", payload: { id, name } });
+        }
       });
-    } catch {
-      dispatch({
-        type: "SET_ERROR",
-        payload: "Failed to refresh agent health",
-      });
+    } catch (error) {
+      // Don't show error on initial startup - agents might still be starting
+      console.warn("[AgentProvider] Failed to refresh agent health (agents might be starting):", error);
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
     }

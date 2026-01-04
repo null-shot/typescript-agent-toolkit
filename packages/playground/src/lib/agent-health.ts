@@ -72,8 +72,22 @@ export async function checkAgentHealth(agent: Agent, force: boolean = false): Pr
     
     setCachedHealth(agent.url, healthStatus);
     
+    // Update agent name if metadata is available
+    // Prefer metadata name over current name if it's more specific
+    let updatedAgent = { ...agent };
+    if (result.metadata?.name) {
+      // Update if current name is generic/default, or if metadata name is different and more specific
+      if (agent.name === "Default Agent" || 
+          agent.name === "Local Agent" || 
+          agent.name.startsWith("Localhost Agent") ||
+          (result.metadata.name !== agent.name && result.metadata.name !== "Default Agent")) {
+        console.log(`Updating agent name from "${agent.name}" to "${result.metadata.name}"`);
+        updatedAgent.name = result.metadata.name;
+      }
+    }
+    
     return {
-      ...agent,
+      ...updatedAgent,
       health: healthStatus,
       lastChecked: healthStatus.lastChecked,
     };

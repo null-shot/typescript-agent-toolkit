@@ -7,7 +7,7 @@ import { MessageCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgentSelector } from "@/components/agent-selector";
 import { cn } from "@/lib/utils";
-import { type Agent, DEFAULT_AGENT } from "@/lib/config";
+import { type Agent, DEFAULT_AGENT, getDefaultAgent } from "@/lib/config";
 import { type UIMessage } from "ai";
 import { useAgentHealth } from "@/hooks/use-agent-health";
 import { useAgentContext } from "@/lib/agent-context";
@@ -109,7 +109,8 @@ export function FloatingChat({
   onClose,
   className,
 }: FloatingChatInternalProps) {
-  const [selectedAgent, setSelectedAgent] = useState<Agent>(DEFAULT_AGENT);
+  // Use getDefaultAgent() to read env vars dynamically
+  const [selectedAgent, setSelectedAgent] = useState<Agent>(() => getDefaultAgent());
   const [input, setInput] = useState("");
 
   // Use manual message state management instead of useChat
@@ -126,9 +127,19 @@ export function FloatingChat({
     checkHealth,
   } = useAgentHealth(selectedAgent, 30000); // Check every 30 seconds
 
-  // Get agent context to sync health updates
+  // Get agent context to sync health updates and get agents
   const agentContext = useAgentContext();
   const updateAgentHealthRef = React.useRef(agentContext.updateAgentHealth);
+  
+  // Sync selected agent with context (use first agent from context if available)
+  React.useEffect(() => {
+    if (agentContext.agents.length > 0) {
+      const contextAgent = agentContext.agents.find(a => a.id === agentContext.selectedAgentId) || agentContext.agents[0];
+      if (contextAgent.url !== selectedAgent.url || contextAgent.name !== selectedAgent.name) {
+        setSelectedAgent(contextAgent);
+      }
+    }
+  }, [agentContext.agents, agentContext.selectedAgentId, selectedAgent.url, selectedAgent.name]);
   
   // Keep ref updated
   React.useEffect(() => {
@@ -331,7 +342,11 @@ export function FloatingChat({
       const assistantMessageId = crypto.randomUUID();
 
       try {
-        console.log("Sending message to agent:", messageText);
+        console.log("[FloatingChat] Sending message to agent:", {
+          url: `${selectedAgent.url}/agent/chat`,
+          messageText,
+          agentName: selectedAgent.name,
+        });
 
         const response = await fetch(`${selectedAgent.url}/agent/chat`, {
           method: "POST",
@@ -339,23 +354,56 @@ export function FloatingChat({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            messages: [...messages, userMessage].map((msg) => ({
-              role: msg.role,
-              content:
-                msg.parts?.find((part) => part.type === "text")?.text || "",
-            })),
+            messages: [...messages, userMessage]
+              .map((msg) => {
+                const textContent = msg.parts?.find((part) => part.type === "text")?.text || "";
+                return {
+                  role: msg.role,
+                  content: textContent,
+                };
+              })
+              .filter((msg) => {
+                // Filter out empty messages - Anthropic API requires non-empty content
+                const content = typeof msg.content === "string" ? msg.content.trim() : "";
+                return content.length > 0;
+              }),
           }),
           signal: AbortSignal.timeout(30000), // 30 second timeout
         });
 
         if (!response.ok) {
           let errorMessage = `Agent request failed: ${response.status}`;
+          let errorDetails = "";
+          
+          // Try to get error details from response body
+          try {
+            const errorText = await response.text();
+            if (errorText) {
+              try {
+                const errorJson = JSON.parse(errorText);
+                errorDetails = errorJson.message || errorJson.error || errorText;
+              } catch {
+                errorDetails = errorText;
+              }
+            }
+          } catch (e) {
+            // Ignore errors when reading error response
+          }
+          
           if (response.status === 404) {
             errorMessage =
               "Agent endpoint not found. Please check the agent URL.";
           } else if (response.status >= 500) {
-            errorMessage = "Agent server error. Please try again later.";
+            errorMessage = `Agent server error (${response.status}). ${errorDetails || "Please try again later."}`;
+          } else if (response.status === 400) {
+            errorMessage = `Bad request: ${errorDetails || "Please check your message format."}`;
           }
+
+          console.error("[FloatingChat] Agent request failed:", {
+            status: response.status,
+            statusText: response.statusText,
+            details: errorDetails,
+          });
 
           throw new Error(errorMessage);
         }
@@ -369,7 +417,7 @@ export function FloatingChat({
 
         setMessages((prev) => [...prev, assistantMessage]);
 
-        // Handle streaming response
+        // Handle streaming response (SSE format from AI SDK)
         const reader = response.body?.getReader();
         if (!reader) {
           throw new Error("No response body");
@@ -377,6 +425,8 @@ export function FloatingChat({
 
         const decoder = new TextDecoder();
         let accumulatedText = "";
+        let buffer = "";
+        let isSSEFormat = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -384,24 +434,87 @@ export function FloatingChat({
 
           // Decode the chunk
           const chunk = decoder.decode(value, { stream: true });
-          accumulatedText += chunk;
+          buffer += chunk;
 
-          // Update the message with accumulated text
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessageId
-                ? {
-                    ...msg,
-                    parts: msg.parts?.map((part) =>
-                      part.type === "text"
-                        ? { ...part, text: accumulatedText }
-                        : part,
-                    ),
-                  }
-                : msg,
-            ),
-          );
+          // Check if this looks like SSE format
+          if (buffer.includes("0:") || buffer.includes("data: ")) {
+            isSSEFormat = true;
+          }
+
+          // If not SSE format, treat as plain text
+          if (!isSSEFormat) {
+            accumulatedText += chunk;
+            continue;
+          }
+
+          // Parse SSE format: "0:"text"" or "data: {...}"
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+
+            // Handle AI SDK format: "0:"text""
+            if (line.startsWith("0:")) {
+              try {
+                const jsonStr = line.slice(2); // Remove "0:" prefix
+                const parsed = JSON.parse(jsonStr);
+                if (typeof parsed === "string") {
+                  accumulatedText += parsed;
+                } else if (parsed.type === "text-delta" && parsed.delta) {
+                  accumulatedText += parsed.delta;
+                } else if (parsed.text) {
+                  accumulatedText += parsed.text;
+                }
+              } catch (e) {
+                // If parsing fails, treat as plain text
+                accumulatedText += line.slice(2);
+              }
+            }
+            // Handle standard SSE format: "data: {...}"
+            else if (line.startsWith("data: ")) {
+              try {
+                const jsonStr = line.slice(6); // Remove "data: " prefix
+                const parsed = JSON.parse(jsonStr);
+                if (parsed.type === "text-delta" && parsed.delta) {
+                  accumulatedText += parsed.delta;
+                } else if (parsed.text) {
+                  accumulatedText += parsed.text;
+                } else if (typeof parsed === "string") {
+                  accumulatedText += parsed;
+                }
+              } catch (e) {
+                // If parsing fails, skip this line
+                console.warn("Failed to parse SSE data:", line);
+              }
+            }
+            // Handle plain text lines in SSE stream
+            else if (line.trim() && !line.startsWith(":")) {
+              accumulatedText += line;
+            }
+          }
         }
+
+        // If no text was accumulated and buffer has content, treat as plain text
+        if (accumulatedText === "" && buffer.trim()) {
+          accumulatedText = buffer.trim();
+        }
+
+        // Update the message with accumulated text
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? {
+                  ...msg,
+                  parts: msg.parts?.map((part) =>
+                    part.type === "text"
+                      ? { ...part, text: accumulatedText }
+                      : part,
+                  ),
+                }
+              : msg,
+          ),
+        );
 
         // Show success message for completed response
         showSuccessToast("Message sent successfully");

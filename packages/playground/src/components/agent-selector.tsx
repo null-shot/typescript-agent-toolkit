@@ -42,6 +42,13 @@ export function AgentSelector({
   // Use the selected agent from props or context (props takes precedence)
   // Props agent has priority because it's updated with latest health from FloatingChat
   const currentAgent = selectedAgent || contextSelectedAgent;
+  
+  // Debug: log current agent name
+  React.useEffect(() => {
+    if (currentAgent) {
+      console.log("[AgentSelector] Current agent:", currentAgent.name, "ID:", currentAgent.id);
+    }
+  }, [currentAgent]);
 
   // Refresh agent health on mount
   useEffect(() => {
@@ -123,8 +130,8 @@ export function AgentSelector({
                   <Check className="size-4" />
                 </SelectPrimitive.ItemIndicator>
               </span>
-              {/* Text for SelectValue - only name, hidden in dropdown */}
-              <SelectPrimitive.ItemText className="sr-only">
+              {/* Text for SelectValue - must be visible for SelectValue to read it */}
+              <SelectPrimitive.ItemText>
                 {agent.name}
               </SelectPrimitive.ItemText>
               {/* Visible content in dropdown */}
