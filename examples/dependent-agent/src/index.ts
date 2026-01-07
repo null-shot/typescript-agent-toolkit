@@ -24,6 +24,20 @@ app.use(
   })
 );
 
+// Root endpoint - provide agent metadata
+app.get("/", (c) => {
+  return c.json({
+    name: "Dependent Agent",
+    version: "0.1.0",
+    description: "Agent with dependent MCP services",
+    endpoints: {
+      "/": "Agent metadata (this endpoint)",
+      "/agent/chat/:sessionId": "Chat endpoint for agent interactions",
+    },
+    features: ["Conversational AI", "MCP tool support", "Multiple AI provider support"],
+  });
+});
+
 // Route all requests to the durable object instance based on session
 app.all("/agent/chat/:sessionId?", async (c) => {
   const { AGENT } = c.env;
@@ -91,6 +105,7 @@ export class DependentAgent extends AiSdkAgent<Env> {
       },
     );
 
+    // Use toTextStreamResponse() for compatibility with playground
     return result.toTextStreamResponse();
   }
 }

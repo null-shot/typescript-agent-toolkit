@@ -9,7 +9,7 @@ A WebSocket server for managing MCP (Model Context Protocol) packages with SQLit
 - 🧪 MCP server connection testing
 - 🐳 Docker containerized
 - ⚡ TypeScript with Node.js 22
-- 🧶 Yarn package manager
+- 🧶 pnpm package manager
 
 ## Quick Start
 
@@ -29,13 +29,13 @@ pnpm dev
 
 ```bash
 # Build the Docker image (run from packages/mcp-toolbox directory - make sure you have done `pnpm i` in ../playground dir listed above)
-yarn docker:build
+pnpm docker:build
 
 # Run the container with all necessary environment variables and volume mounts (refer to package.json if you want to edit this command)
-yarn docker:run
+pnpm docker:run
 
 # Build and run using docker-compose (recommended for development)
-yarn docker:dev
+pnpm docker:dev
 ```
 
 **Command Details:**
@@ -304,7 +304,7 @@ ws.on("open", () => {
         ],
         env: {},
       },
-    })
+    }),
   );
 });
 
@@ -326,7 +326,7 @@ ws.send(
       args: ["-y", "figma-developer-mcp", "--figma-api-key=NEW-KEY", "--stdio"],
       env: { FIGMA_API_KEY: "NEW-KEY-VALUE" },
     },
-  })
+  }),
 );
 
 // Delete package
@@ -334,7 +334,7 @@ ws.send(
   JSON.stringify({
     verb: "delete",
     data: { "unique-name": "figma-mcp" },
-  })
+  }),
 );
 ```
 
@@ -413,22 +413,22 @@ PROXY_ID=your-uuid-here
 
 ```bash
 # Start server with proxyId
-yarn dev --proxy-id your-uuid-here
+pnpm dev --proxy-id your-uuid-here
 
 # Or using environment variable
-PROXY_ID=your-uuid-here yarn dev
+PROXY_ID=your-uuid-here pnpm dev
 
 # Run tests
-yarn test:mcp
+pnpm test:mcp
 
 # Send test message
-yarn send
+pnpm send
 
 # Build for production
-yarn build
+pnpm build
 
 # Start production server with proxyId
-yarn start --proxy-id your-uuid-here
+pnpm start --proxy-id your-uuid-here
 ```
 
 ## Database

@@ -13,6 +13,7 @@ node_modules/
 dist/
 build/
 lib/
+!/**/src/**/lib
 
 # Cloudflare Workers
 .wrangler/
@@ -64,3 +65,6 @@ tmp/
 
 data/
 *.db
+
+# Bug fix reports (temporary documentation for PRs)
+BUGFIX_REPORT.md

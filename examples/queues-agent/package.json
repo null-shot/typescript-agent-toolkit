@@ -3,7 +3,8 @@
 	"version": "0.0.1",
 	"private": true,
 	"scripts": {
-		"dev": "wrangler dev",
+		"dev": "concurrently \"wrangler dev --local --port 8787\" \"cd ../../packages/playground && NEXT_PUBLIC_DEFAULT_AGENT_NAME='Queues Agent' NEXT_PUBLIC_DEFAULT_AGENT_URL='http://localhost:8787' pnpm dev\"",
+		"dev:agent-only": "wrangler dev --local --port 8787",
 		"deploy": "wrangler deploy",
 		"build": "wrangler build",
 		"test": "vitest run"
@@ -13,10 +14,16 @@
 		"wrangler": "catalog:",
 		"vitest": "catalog:",
 		"@cloudflare/vitest-pool-workers": "catalog:",
-		"@nullshot/test-utils": "workspace:*"
+		"@nullshot/test-utils": "workspace:*",
+		"concurrently": "^9.1.2"
 	},
 	"dependencies": {
 		"@nullshot/agent": "workspace:*",
+		"@ai-sdk/anthropic": "catalog:",
+		"@ai-sdk/openai": "catalog:",
+		"@ai-sdk/google": "catalog:",
+		"@ai-sdk/deepseek": "catalog:",
+		"@ai-sdk/xai": "catalog:",
 		"ai": "catalog:",
 		"hono": "^4.7.7",
 		"workers-ai-provider": "catalog:"

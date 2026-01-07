@@ -26,6 +26,6 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "catalog:",
     "@nullshot/mcp": "workspace:*",
-    "zod": "^3.23.8"
+    "zod": "catalog:"
   }
 }

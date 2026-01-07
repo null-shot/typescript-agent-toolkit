@@ -77,3 +77,16 @@ export class MockAjv {
 
 // Default export for ES modules
 export default MockAjv;
+
+// Export mock codegen for ajv-formats compatibility
+export const codegen = {
+  _: () => "",
+  str: () => "",
+  nil: () => "",
+  Name: class {
+    constructor(public str: string) {}
+  },
+  Code: class {
+    constructor(public code: string) {}
+  },
+};

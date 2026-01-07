@@ -40,15 +40,43 @@ The agent uses Cloudflare Durable Objects to maintain conversation state across 
 
 2. **Set up environment variables:**
 
+   For local development, create a `.dev.vars` file:
+
+   ```bash
+   cp .dev.vars.example .dev.vars
+   ```
+
+   Then edit `.dev.vars` and add your API keys:
+
+   ```
+   AI_PROVIDER=anthropic
+   AI_PROVIDER_API_KEY=your_anthropic_api_key_here
+   MODEL_ID=claude-sonnet-4-20250514
+   ```
+
+   For production deployment, use Cloudflare Workers secrets:
+
    ```bash
    # Add your Anthropic API key to Cloudflare Workers secrets
-   npx wrangler secret put ANTHROPIC_API_KEY
+   npx wrangler secret put AI_PROVIDER_API_KEY
    ```
 
 3. **Start development server:**
 
    ```bash
    pnpm dev
+   ```
+
+   This will automatically start:
+   - The agent service (via `nullshot dev` in local mode, no Cloudflare login required)
+   - The Playground UI on port 3000, which connects to your agent
+
+   **Note**: The agent runs in local mode, so no Cloudflare login is required for local development.
+
+   To start only the agent (without UI):
+
+   ```bash
+   pnpm dev:agent-only
    ```
 
 4. **Deploy to production:**
@@ -285,13 +313,22 @@ const result = await this.streamText(sessionId, {
 
 ### Local Development
 
+The development setup automatically runs:
+- Agent service (via `nullshot dev` in local mode, no Cloudflare login required)
+- Playground UI on port 3000 (automatically connects to the agent)
+
 ```bash
-# Start development server with hot reload
+# Start development server with hot reload (agent + UI)
 pnpm dev
+
+# Start only the agent (without UI)
+pnpm dev:agent-only
 
 # Generate TypeScript types
 pnpm cf-typegen
 ```
+
+**Note**: All development commands use local mode (`--local` flag), so no Cloudflare authentication is required for local testing.
 
 ### Testing
 

@@ -610,9 +610,10 @@ async function runDev(
   ];
 
   // Build args array with separate -c flags for each config
-  const args = ["dev", ...configPaths.flatMap((path) => ["-c", path])];
+  // Add --local flag to avoid Cloudflare login requirement for local development
+  const args = ["dev", "--local", ...configPaths.flatMap((path) => ["-c", path])];
 
-  const fullCommand = `wrangler dev ${configPaths.map((path) => `-c ${path}`).join(" ")}`;
+  const fullCommand = `wrangler dev --local ${configPaths.map((path) => `-c ${path}`).join(" ")}`;
 
   logger.info(chalk.green(`\n🚀 Executing: ${fullCommand}\n`));
 

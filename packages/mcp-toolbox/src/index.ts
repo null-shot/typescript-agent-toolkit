@@ -90,7 +90,7 @@ const AddRequestSchema = z.object({
   "unique-name": z.string().min(1, "unique-name is required"),
   command: z.string().min(1, "command is required"),
   args: z.array(z.string()).optional().default([]),
-  env: z.record(z.string()).optional().default({}),
+  env: z.record(z.string(), z.string()).optional().default({}),
 });
 
 const DeleteRequestSchema = z.object({
@@ -101,7 +101,7 @@ const UpdateRequestSchema = z.object({
   "unique-name": z.string().min(1, "unique-name is required"),
   command: z.string().min(1, "command is required"),
   args: z.array(z.string()).optional().default([]),
-  env: z.record(z.string()).optional().default({}),
+  env: z.record(z.string(), z.string()).optional().default({}),
 });
 
 const WebSocketMessageSchema = z.object({
@@ -370,7 +370,7 @@ async function handleAddCommand(data: any) {
     const connectionTest = await testMcpServerConnection(
       validatedData.command,
       validatedData.args,
-      validatedData.env
+      validatedData.env as Record<string, string>
     );
 
     if (!connectionTest.success) {
@@ -405,7 +405,7 @@ async function handleAddCommand(data: any) {
       uniqueName: validatedData["unique-name"],
       command: validatedData.command,
       args: validatedData.args,
-      env: validatedData.env,
+      env: validatedData.env as Record<string, string>,
     });
 
     // Create persistent connection for proxy functionality
@@ -443,7 +443,7 @@ async function handleAddCommand(data: any) {
       return {
         success: false,
         error: "Validation failed",
-        details: error.errors,
+        details: error.issues,
       };
     }
 
@@ -479,7 +479,7 @@ async function handleUpdateCommand(data: any) {
     const connectionTest = await testMcpServerConnection(
       validatedData.command,
       validatedData.args,
-      validatedData.env
+      validatedData.env as Record<string, string>
     );
 
     if (!connectionTest.success) {
@@ -518,7 +518,7 @@ async function handleUpdateCommand(data: any) {
       {
         command: validatedData.command,
         args: validatedData.args,
-        env: validatedData.env,
+        env: validatedData.env as Record<string, string>,
       }
     );
 
@@ -564,7 +564,7 @@ async function handleUpdateCommand(data: any) {
       return {
         success: false,
         error: "Validation failed",
-        details: error.errors,
+        details: error.issues,
       };
     }
 
@@ -605,7 +605,7 @@ async function handleDeleteCommand(data: any) {
       return {
         success: false,
         error: "Validation failed",
-        details: error.errors,
+        details: error.issues,
       };
     }
 
@@ -842,7 +842,7 @@ async function handleAdminVerbMessage(messageData: any, ws: WebSocket) {
 
     if (error instanceof z.ZodError) {
       errorMessage = "Invalid admin message format";
-      details = error.errors;
+      details = error.issues;
     }
 
     ws.send(

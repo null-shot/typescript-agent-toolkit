@@ -48,8 +48,9 @@ export abstract class McpServerDO<Env = unknown> extends DurableObject<Env> {
 	 * Abstract method that must be implemented by subclasses to configure the server instance.
 	 * Called after server initialization to set up any additional server configuration, e.g., handlers of incoming RPC calls.
 	 * Note: This is only called when using a real McpServer, not when using a proxy
+	 * Can be synchronous or asynchronous (returning Promise<void>)
 	 */
-	abstract configureServer(server: McpServer): void;
+	abstract configureServer(server: McpServer): void | Promise<void>;
 
 	protected processSSEConnection(request: Request): Response {
 		// Session ID must exist as it will be created at the worker level prior to forwarding to DO.

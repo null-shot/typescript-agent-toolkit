@@ -17,11 +17,13 @@
     "changeset": "changeset",
     "version": "changeset version",
     "publish": "changeset publish",
-    "release": "changeset publish"
+    "release": "changeset publish",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.5",
-    "@modelcontextprotocol/sdk": "^1.17.2"
+    "@modelcontextprotocol/sdk": "^1.17.2",
+    "husky": "^9.1.7"
   },
   "packageManager": "pnpm@9.12.3+sha1.4fb96925d434c491285182acf29803bb9aa2e6e5"
 }

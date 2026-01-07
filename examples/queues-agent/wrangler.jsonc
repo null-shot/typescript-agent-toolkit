@@ -4,12 +4,21 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-02-11",
 	"compatibility_flags": ["nodejs_compat"],
+	"dev": {
+		"port": 8787
+	},
 	"observability": {
 		"enabled": true,
 		"head_sampling_rate": 1,
 	},
 	"vars": {
+		"AI_PROVIDER": "workers-ai",
 		"USE_MOCK_AI": "true",
+		"ANTHROPIC_API_KEY": "",
+		"OPEN_AI_API_KEY": "",
+		"DEEPSEEK_API_KEY": "",
+		"GOOGLE_API_KEY": "",
+		"GROK_API_KEY": "",
 	},
 	"durable_objects": {
 		"bindings": [

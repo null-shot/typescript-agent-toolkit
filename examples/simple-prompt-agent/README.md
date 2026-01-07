@@ -66,19 +66,26 @@ GROK_API_KEY=[your_grok_api_key]
 
 ### Development
 
-The development setup runs three services:
+The development setup automatically runs three services:
 
+- Agent service on port 8787 (runs in local mode, no Cloudflare login required)
 - CRUD MCP server on port 8788
-- Agent service on port 8787
-- Playground UI on port 3000
+- Playground UI on port 3000 (automatically connects to the agent)
 
-To start development:
+To start development with all services:
 
 ```bash
 pnpm dev
 ```
 
-To start the agent by itself:
+This will:
+1. Start the agent worker on port 8787 in local mode (no Cloudflare authentication needed)
+2. Start the CRUD MCP server on port 8788
+3. Launch the Playground UI on port 3000, which automatically connects to your agent
+
+**Note**: The agent runs with `--local` flag, so no Cloudflare login is required for local development.
+
+To start only the agent (without UI):
 
 ```bash
 pnpm start
