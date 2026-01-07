@@ -115,9 +115,9 @@ export async function testAgentConnection(url: string): Promise<{ isOnline: bool
       try {
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
-          const data = await response.json();
+          const data = await response.json() as Record<string, unknown>;
           if (data.name || data.agentName) {
-            metadata = { name: data.name || data.agentName };
+            metadata = { name: (data.name || data.agentName) as string };
             console.log(`[testAgentConnection] Found metadata name: ${metadata.name}`);
           }
         }
