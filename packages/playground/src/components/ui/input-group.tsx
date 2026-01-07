@@ -178,9 +178,9 @@ function InputGroupTextarea({
       )}
       style={{
         // Disable field-sizing-content to prevent auto-growing
-        fieldSizing: "auto",
+        fieldSizing: "fixed" as const,
         ...style,
-      }}
+      } as React.CSSProperties}
       {...props}
     />
   )
