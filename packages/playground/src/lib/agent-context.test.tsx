@@ -18,7 +18,12 @@ vi.mock("@/lib/agent-storage", () => ({
   testAgentConnection: vi.fn(async (url: string) => ({
     isOnline: url.includes("localhost"),
     error: undefined,
+    metadata: undefined,
   })),
+  detectAgentName: vi.fn(async (url: string) => {
+    if (url.includes("localhost:8787")) return "Local Agent";
+    return "Default Agent";
+  }),
   saveCustomAgent: vi.fn((name: string, url: string) => ({
     id: "test-agent",
     name,
