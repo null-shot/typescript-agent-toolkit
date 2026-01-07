@@ -39,12 +39,12 @@ export async function getAgentMetadata(url: string): Promise<{ name?: string; ve
     });
     
     if (response.ok) {
-      const data = await response.json();
+      const data = await response.json() as Record<string, unknown>;
       // Check if response contains agent metadata
       if (data.name || data.agentName || data.service) {
         return {
-          name: data.name || data.agentName || data.service,
-          version: data.version,
+          name: (data.name || data.agentName || data.service) as string,
+          version: data.version as string | undefined,
           ...data,
         };
       }
