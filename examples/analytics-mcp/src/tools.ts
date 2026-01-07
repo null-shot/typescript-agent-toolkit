@@ -19,8 +19,8 @@ export function setupServerTools(server: McpServer, repository: AnalyticsReposit
     'Track a single analytics data point with dimensions and metrics',
     {
       dataset: z.string().describe('Dataset name to write to'),
-      dimensions: z.record(z.string()).describe('Categorical data for grouping'),
-      metrics: z.record(z.number()).describe('Numerical measurements'),
+      dimensions: z.record(z.string(), z.string()).describe('Categorical data for grouping'),
+      metrics: z.record(z.string(), z.number()).describe('Numerical measurements'),
       timestamp: z.number().optional().describe('Unix timestamp (optional)')
     },
     async ({ dataset, dimensions, metrics, timestamp }: {
@@ -84,10 +84,10 @@ export function setupServerTools(server: McpServer, repository: AnalyticsReposit
     {
       dataset: z.string().describe('Dataset name to write to'),
       dataPoints: z.array(z.object({
-        dimensions: z.record(z.string()),
-        metrics: z.record(z.number()),
+        dimensions: z.record(z.string(), z.string()),
+        metrics: z.record(z.string(), z.number()),
         timestamp: z.number().optional(),
-        metadata: z.record(z.any()).optional()
+        metadata: z.record(z.string(), z.any()).optional()
       })).describe('Array of data points to track')
     },
     async ({ dataset, dataPoints }: {

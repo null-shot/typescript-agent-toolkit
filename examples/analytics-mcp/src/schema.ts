@@ -79,15 +79,15 @@ export interface DatasetInfo {
 // Zod validation schemas
 export const AnalyticsDataPointSchema = z.object({
   timestamp: z.number().optional(),
-  dimensions: z.record(z.string()),
-  metrics: z.record(z.number()),
-  metadata: z.record(z.any()).optional()
+  dimensions: z.record(z.string(), z.string()),
+  metrics: z.record(z.string(), z.number()),
+  metadata: z.record(z.string(), z.any()).optional()
 });
 
 export const TrackMetricSchema = z.object({
   dataset: z.string().min(1, "Dataset name is required"),
-  dimensions: z.record(z.string()),
-  metrics: z.record(z.number()),
+  dimensions: z.record(z.string(), z.string()),
+  metrics: z.record(z.string(), z.number()),
   timestamp: z.number().optional()
 });
 
