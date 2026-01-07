@@ -15,6 +15,8 @@ export interface McpWorkersConfigOptions {
   includeAjvMock?: boolean;
   /** Custom ajv mock package path */
   ajvMockPath?: string;
+  /** Custom ajv-formats mock package path */
+  ajvFormatsMockPath?: string;
   /** Additional SSR external packages */
   additionalSsrExternals?: string[];
   /** Additional options to pass to defineWorkersConfig */
@@ -32,6 +34,7 @@ export function createMcpWorkersConfig(options: McpWorkersConfigOptions = {}) {
     additionalAliases = {},
     includeAjvMock = true,
     ajvMockPath = "@nullshot/test-utils/vitest/ajv-mock",
+    ajvFormatsMockPath = "@nullshot/test-utils/vitest/ajv-formats-mock",
     additionalSsrExternals = [],
     ...otherOptions
   } = options;
@@ -52,9 +55,16 @@ export function createMcpWorkersConfig(options: McpWorkersConfigOptions = {}) {
         ...(includeAjvMock && {
           ajv: ajvMockPath,
           "ajv/dist/ajv": ajvMockPath,
+          "ajv/dist/compile/codegen": ajvMockPath,
+          "ajv/dist/compile": ajvMockPath,
+          "ajv-formats": ajvFormatsMockPath,
+          "@modelcontextprotocol/sdk/dist/esm/validation/ajv-formats": ajvFormatsMockPath,
         }),
         ...additionalAliases,
       },
+    },
+    ssr: {
+      noExternal: includeAjvMock ? ["@modelcontextprotocol/sdk"] : [],
     },
     ...otherOptions,
   };
