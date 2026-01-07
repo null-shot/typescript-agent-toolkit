@@ -74,7 +74,7 @@ export async function checkAgentHealth(agent: Agent, force: boolean = false): Pr
     
     // Update agent name if metadata is available
     // Prefer metadata name over current name if it's more specific
-    let updatedAgent = { ...agent };
+    const updatedAgent = { ...agent };
     if (result.metadata?.name) {
       // Update if current name is generic/default, or if metadata name is different and more specific
       if (agent.name === "Default Agent" || 

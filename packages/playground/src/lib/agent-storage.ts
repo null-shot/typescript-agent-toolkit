@@ -27,7 +27,7 @@ export function validateAgentUrl(url: string): { isValid: boolean; error?: strin
 }
 
 // Try to get agent metadata (name, version, etc.) from agent endpoint
-export async function getAgentMetadata(url: string): Promise<{ name?: string; version?: string; [key: string]: any } | null> {
+export async function getAgentMetadata(url: string): Promise<{ name?: string; version?: string; [key: string]: unknown } | null> {
   try {
     // Try to get metadata from root endpoint (some agents expose this)
     const response = await fetch(`${url}/`, {
