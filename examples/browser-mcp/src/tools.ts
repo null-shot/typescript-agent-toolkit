@@ -350,7 +350,7 @@ export function setupBrowserTools(
           "URL to navigate to before extraction (optional if sessionId provided)"
         ),
       selectors: z
-        .record(z.string())
+        .record(z.string(), z.string())
         .optional()
         .describe(
           "Object with keys as field names and values as CSS selectors"
