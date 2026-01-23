@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { existsSync } from "node:fs";
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
@@ -13,6 +14,24 @@ import { CLIError } from "./utils/errors.js";
 import { Logger } from "./utils/logger.js";
 import { TemplateManager } from "./template/template-manager.js";
 import { InputManager } from "./template/input-manager.js";
+import {
+  deployAgent,
+  setSecret,
+  setTelegramWebhook,
+  generateAgentsEnvString,
+  updateWranglerWithAgents,
+  getAvailableProviders,
+  discoverMCPServers,
+  createQueue,
+  updateAgentWithMCPServices,
+  type DeployResult,
+  type DeployableMCPServer,
+} from "./deploy/deploy-manager.js";
+import {
+  parseCloudflareError,
+  formatErrorInline,
+  formatWarningCard,
+} from "./utils/error-formatter.js";
 import type {
   MCPConfig,
   InstallOptions,
@@ -613,7 +632,7 @@ async function runDev(
   // Add --local flag to avoid Cloudflare login requirement for local development
   const args = ["dev", "--local", ...configPaths.flatMap((path) => ["-c", path])];
 
-  const fullCommand = `wrangler dev --local ${configPaths.map((path) => `-c ${path}`).join(" ")}`;
+  const fullCommand = `npx wrangler dev --local ${configPaths.map((path) => `-c ${path}`).join(" ")}`;
 
   logger.info(chalk.green(`\n🚀 Executing: ${fullCommand}\n`));
 
@@ -630,7 +649,7 @@ async function runDev(
   // Execute the command
   const { spawn } = await import("node:child_process");
 
-  const childProcess = spawn("wrangler", args, {
+  const childProcess = spawn("npx", ["wrangler", ...args], {
     stdio: "inherit",
     shell: false,
     env: process.env,
@@ -739,6 +758,520 @@ program
       }
     } catch (error) {
       spinner.fail(chalk.red("❌ Failed to start development servers"));
+      handleError(error);
+    } finally {
+      // Restore original working directory
+      if (cwd && cwd !== originalCwd) {
+        process.chdir(originalCwd);
+      }
+    }
+  });
+
+// Deploy command - deploy agents, playground, and telegram bot
+program
+  .command("deploy")
+  .description("Deploy AI agents, playground, and Telegram bot to Cloudflare Workers")
+  .option("--skip-secrets", "Skip setting secrets (use existing)")
+  .action(async (options: {
+    skipSecrets?: boolean;
+  } & GlobalOptions) => {
+    const { dryRun, verbose, cwd } = program.opts<GlobalOptions>();
+
+    // Change to the specified working directory
+    const originalCwd = process.cwd();
+    if (cwd && cwd !== originalCwd) {
+      process.chdir(cwd);
+    }
+
+    try {
+      if (verbose) logger.setVerbose(true);
+
+      // Import prompts dynamically
+      const prompts = (await import("prompts")).default;
+
+      // Header
+      console.log("");
+      logger.info(chalk.blue.bold("🚀 Nullshot Deploy"));
+      console.log("");
+
+      const rootDir = process.cwd();
+
+      // Check what's available - agents
+      const agents = [
+        { name: "simple-prompt-agent", path: `${rootDir}/examples/simple-prompt-agent`, selected: true, requiresMcp: false, requiresQueue: false, queueName: undefined as string | undefined, description: "Simple conversational AI agent" },
+        { name: "queues-agent", path: `${rootDir}/examples/queues-agent`, selected: false, requiresMcp: false, requiresQueue: true, queueName: "request-queue" as string | undefined, description: "Async processing (requires Workers Paid plan)" },
+        { name: "dependent-agent", path: `${rootDir}/examples/dependent-agent`, selected: false, requiresMcp: true, requiresQueue: false, queueName: undefined as string | undefined, description: "Agent with external MCP tools" },
+      ].filter(a => existsSync(a.path));
+
+      // Check what's available - MCP servers
+      const mcpServers = await discoverMCPServers(rootDir);
+
+      // Check what's available - interfaces
+      const playgroundPath = `${rootDir}/examples/playground-worker`;
+      const telegramPath = `${rootDir}/examples/telegram-bot-agent`;
+      
+      const hasPlayground = existsSync(playgroundPath);
+      const hasTelegram = existsSync(telegramPath);
+
+      if (agents.length === 0) {
+        logger.error(chalk.red("No agents found in examples/"));
+        return;
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // STEP 1: Select AI Agents
+      // ═══════════════════════════════════════════════════════════════
+      logger.info(chalk.cyan.bold("Step 1: Select AI Agents"));
+      logger.info(chalk.gray("Choose which agents to deploy\n"));
+
+      const agentChoices = agents.map(a => ({
+        title: `${a.name} ${chalk.gray(`- ${a.description}`)}`,
+        value: a.name,
+        selected: a.selected,
+      }));
+
+      const agentSelection = await prompts({
+        type: "multiselect",
+        name: "agents",
+        message: "AI Agents:",
+        choices: agentChoices,
+        hint: "Space to select, Enter to continue",
+      });
+
+      if (!agentSelection.agents || agentSelection.agents.length === 0) {
+        logger.info(chalk.yellow("\nNo agents selected. Exiting."));
+        return;
+      }
+
+      const selectedAgents = agents.filter(a => agentSelection.agents.includes(a.name));
+      const selectedMCPServers: DeployableMCPServer[] = [];
+      let mcpServiceForDependent: DeployableMCPServer | null = null;
+
+      // Warn about paid plan requirement for queues-agent
+      const queuesAgent = selectedAgents.find(a => a.name === "queues-agent");
+      if (queuesAgent) {
+        logger.info(chalk.yellow("\n⚠️  Note: queues-agent requires Cloudflare Workers Paid plan for Queues"));
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // STEP 2: Select MCP Server (only if needed)
+      // ═══════════════════════════════════════════════════════════════
+      const agentRequiringMcp = selectedAgents.find(a => a.requiresMcp);
+      
+      if (agentRequiringMcp && mcpServers.length > 0) {
+        logger.info(chalk.gray("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"));
+        logger.info(chalk.cyan.bold("Step 2: Select MCP Server"));
+        logger.info(chalk.gray(`${agentRequiringMcp.name} needs an MCP server for external tools\n`));
+        
+        const mcpChoice = await prompts({
+          type: "multiselect",
+          name: "mcpServers",
+          message: "MCP Server:",
+          choices: mcpServers.map(m => ({ 
+            title: `${m.name} ${chalk.gray(`- ${m.description}`)}`, 
+            value: m.name,
+            selected: m.name === "crud-mcp", // Pre-select crud-mcp as default
+          })),
+          hint: "Space to select, Enter to continue",
+          max: 1, // Only allow one selection for now
+        });
+
+        if (mcpChoice.mcpServers && mcpChoice.mcpServers.length > 0) {
+          const chosenName = mcpChoice.mcpServers[0];
+          const chosen = mcpServers.find(m => m.name === chosenName);
+          if (chosen) {
+            selectedMCPServers.push(chosen);
+            mcpServiceForDependent = chosen;
+          }
+        } else {
+          logger.warn(chalk.yellow(`\n⚠️  No MCP server selected. ${agentRequiringMcp.name} will fail.`));
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // STEP 3: Select Interfaces (optional)
+      // ═══════════════════════════════════════════════════════════════
+      let deployPlayground = false;
+      let deployTelegram = false;
+
+      if (hasPlayground || hasTelegram) {
+        logger.info(chalk.gray("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"));
+        logger.info(chalk.cyan.bold("Step 3: Select Interfaces (optional)"));
+        logger.info(chalk.gray("Uncheck all to deploy only agents without UI\n"));
+
+        const interfaceChoices: Array<{ title: string; value: string; selected: boolean }> = [];
+        
+        if (hasPlayground) {
+          interfaceChoices.push({
+            title: `Web Chat ${chalk.gray("- Browser-based playground UI")}`,
+            value: "playground",
+            selected: true,
+          });
+        }
+        
+        if (hasTelegram) {
+          interfaceChoices.push({
+            title: `Telegram Bot ${chalk.gray("- Chat via Telegram messenger")}`,
+            value: "telegram",
+            selected: false,
+          });
+        }
+
+        const interfaceSelection = await prompts({
+          type: "multiselect",
+          name: "interfaces",
+          message: "Interfaces:",
+          choices: interfaceChoices,
+          hint: "Space to toggle, Enter to continue (can be empty)",
+        });
+
+        deployPlayground = interfaceSelection.interfaces?.includes("playground") || false;
+        deployTelegram = interfaceSelection.interfaces?.includes("telegram") || false;
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // STEP 4: AI Provider
+      // ═══════════════════════════════════════════════════════════════
+      let aiProvider = "anthropic";
+      let aiApiKey = "";
+
+      if (selectedAgents.length > 0 && !options.skipSecrets) {
+        logger.info(chalk.gray("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"));
+        logger.info(chalk.cyan.bold("Step 4: AI Provider"));
+        
+        const providers = getAvailableProviders();
+        
+        const providerChoice = await prompts({
+          type: "select",
+          name: "provider",
+          message: "Select AI provider:",
+          choices: providers.map((p) => ({ title: p.name, value: p.value })),
+          initial: 1, // Anthropic default
+        });
+
+        if (!providerChoice.provider) {
+          logger.info(chalk.yellow("\nCancelled."));
+          return;
+        }
+
+        aiProvider = providerChoice.provider;
+
+        // Get API key
+        const selectedProvider = providers.find((p) => p.value === aiProvider);
+        if (selectedProvider && selectedProvider.envKey) {
+          const keyResponse = await prompts({
+            type: "password",
+            name: "apiKey",
+            message: `${selectedProvider.name} API Key:`,
+          });
+          
+          if (!keyResponse.apiKey) {
+            logger.warn(chalk.yellow("\n⚠️ No API key provided. Skipping agent deployment."));
+            return;
+          }
+          
+          aiApiKey = keyResponse.apiKey;
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // STEP 5: Telegram Token (only if selected)
+      // ═══════════════════════════════════════════════════════════════
+      let telegramToken = "";
+      if (deployTelegram && !options.skipSecrets) {
+        logger.info(chalk.gray("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"));
+        logger.info(chalk.cyan.bold("Step 5: Telegram Bot"));
+        
+        const telegramResponse = await prompts({
+          type: "password",
+          name: "token",
+          message: "Bot Token (from @BotFather):",
+        });
+        
+        if (!telegramResponse.token) {
+          logger.warn(chalk.yellow("\n⚠️ No token provided. Skipping Telegram bot."));
+          deployTelegram = false;
+        } else {
+          telegramToken = telegramResponse.token;
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // PLAN SUMMARY
+      // ═══════════════════════════════════════════════════════════════
+      logger.info(chalk.gray("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"));
+      logger.info(chalk.white.bold("📋 Plan:"));
+      
+      // MCP servers first
+      if (selectedMCPServers.length > 0) {
+        logger.info(chalk.cyan("   MCP Servers:"));
+        for (const mcp of selectedMCPServers) {
+          logger.info(chalk.white(`   • ${mcp.name}`));
+        }
+      }
+
+      // Agents
+      if (selectedAgents.length > 0) {
+        logger.info(chalk.cyan("   AI Agents:"));
+        for (const agent of selectedAgents) {
+          let extra = `${aiProvider}`;
+          if (agent.requiresMcp && mcpServiceForDependent) {
+            extra += ` → ${mcpServiceForDependent.name}`;
+          }
+          if (agent.requiresQueue) {
+            extra += ` + queue`;
+          }
+          logger.info(chalk.white(`   • ${agent.name} (${extra})`));
+        }
+      }
+
+      // Interfaces
+      if (deployPlayground || (deployTelegram && telegramToken)) {
+        logger.info(chalk.cyan("   Interfaces:"));
+        if (deployPlayground) {
+          logger.info(chalk.white("   • Web Chat"));
+        }
+        if (deployTelegram && telegramToken) {
+          logger.info(chalk.white("   • Telegram Bot"));
+        }
+      }
+      console.log("");
+
+      if (dryRun) {
+        logger.info(chalk.yellow("🔍 Dry run - no deployment"));
+        return;
+      }
+
+      // Confirm
+      const confirm = await prompts({
+        type: "confirm",
+        name: "proceed",
+        message: "Start?",
+        initial: true,
+      });
+
+      if (!confirm.proceed) {
+        logger.info(chalk.yellow("\nCancelled."));
+        return;
+      }
+
+      // Step 5: Deploy
+      logger.info(chalk.gray("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"));
+      logger.info(chalk.white.bold("⏳ Deploying...\n"));
+
+      const agentResults: DeployResult[] = [];
+      const mcpResults: DeployResult[] = [];
+      let playgroundUrl = "";
+      let telegramUrl = "";
+
+      // Step 5a: Create required queues
+      for (const agent of selectedAgents) {
+        if (agent.requiresQueue && agent.queueName) {
+          logger.info(chalk.gray(`  Creating queue: ${agent.queueName}...`));
+          const queueResult = await createQueue(agent.queueName, agent.path);
+          if (queueResult.success) {
+            logger.info(chalk.green(`   ✓ Queue '${agent.queueName}' ready`));
+          } else {
+            // Parse and format the error nicely
+            const errorInfo = parseCloudflareError(queueResult.error || "Unknown error");
+            logger.info("\n" + formatWarningCard(
+              errorInfo.title,
+              errorInfo.message,
+              errorInfo.hint
+            ));
+            logger.info(chalk.gray(`\n  → ${agent.name} deployment will likely fail\n`));
+          }
+        }
+      }
+
+      // Step 5b: Deploy MCP servers first
+      for (const mcp of selectedMCPServers) {
+        const result = await deployAgent({
+          name: mcp.name,
+          path: mcp.path,
+          wranglerConfig: mcp.wranglerConfig,
+        });
+        
+        // Store the worker name for service bindings
+        result.workerName = mcp.workerName;
+        mcpResults.push(result);
+
+        if (result.success) {
+          logger.info(chalk.green(`   ✓ ${mcp.name} → ${result.url || "deployed"}`));
+        } else {
+          const errorInfo = parseCloudflareError(result.error || "Unknown error");
+          logger.info("\n" + formatErrorInline(errorInfo, mcp.name));
+        }
+      }
+
+      // Step 5c: Update dependent-agent's wrangler.jsonc with MCP service binding
+      if (mcpServiceForDependent) {
+        const dependentAgent = selectedAgents.find(a => a.name === "dependent-agent");
+        if (dependentAgent) {
+          const mcpDeployed = mcpResults.find(r => r.name === mcpServiceForDependent!.name && r.success);
+          if (mcpDeployed) {
+            await updateAgentWithMCPServices(
+              `${dependentAgent.path}/wrangler.jsonc`,
+              [{ binding: "MCP_SERVICE", workerName: mcpServiceForDependent.workerName || mcpServiceForDependent.name }]
+            );
+            logger.info(chalk.blue(`   → Linked ${mcpServiceForDependent.name} to dependent-agent`));
+          }
+        }
+      }
+
+      // Step 5d: Deploy all selected agents
+      for (const agent of selectedAgents) {
+        // Set secrets first
+        if (!options.skipSecrets && aiApiKey) {
+          await setSecret(agent.path, "AI_PROVIDER", aiProvider);
+          
+          const providers = getAvailableProviders();
+          const provider = providers.find((p) => p.value === aiProvider);
+          if (provider && provider.envKey) {
+            await setSecret(agent.path, provider.envKey, aiApiKey);
+          }
+
+          // Special handling for dependent-agent which uses different secret names
+          if (agent.name === "dependent-agent") {
+            await setSecret(agent.path, "AI_PROVIDER_API_KEY", aiApiKey);
+            // Set default model ID based on provider
+            const defaultModels: Record<string, string> = {
+              anthropic: "claude-3-haiku-20240307",
+              openai: "gpt-4o-mini",
+              deepseek: "deepseek-chat",
+              grok: "grok-beta",
+            };
+            const modelId = defaultModels[aiProvider] || "claude-3-haiku-20240307";
+            await setSecret(agent.path, "MODEL_ID", modelId);
+          }
+        }
+
+        const result = await deployAgent({
+          name: agent.name,
+          path: agent.path,
+          wranglerConfig: `${agent.path}/wrangler.jsonc`,
+        });
+        agentResults.push(result);
+
+        if (result.success) {
+          logger.info(chalk.green(`   ✓ ${agent.name} → ${result.url || "deployed"}`));
+        } else {
+          const errorInfo = parseCloudflareError(result.error || "Unknown error");
+          logger.info("\n" + formatErrorInline(errorInfo, agent.name));
+        }
+      }
+
+      // Generate AGENTS string
+      const agentsEnvString = generateAgentsEnvString(agentResults);
+
+      // Deploy playground
+      if (deployPlayground) {
+        // Update AGENTS env if we deployed agents
+        if (agentsEnvString) {
+          await updateWranglerWithAgents(
+            `${playgroundPath}/wrangler.jsonc`,
+            agentsEnvString
+          );
+        }
+
+        const result = await deployAgent({
+          name: "playground-worker",
+          path: playgroundPath,
+          wranglerConfig: `${playgroundPath}/wrangler.jsonc`,
+        });
+
+        if (result.success) {
+          playgroundUrl = result.url || "";
+          logger.info(chalk.green(`   ✓ Web Chat → ${result.url || "deployed"}`));
+        } else {
+          const errorInfo = parseCloudflareError(result.error || "Unknown error");
+          logger.info("\n" + formatErrorInline(errorInfo, "Web Chat"));
+        }
+      }
+
+      // Deploy Telegram bot
+      if (deployTelegram && telegramToken) {
+        // Set secrets
+        if (!options.skipSecrets) {
+          await setSecret(telegramPath, "TELEGRAM_BOT_TOKEN", telegramToken);
+        }
+        
+        // Update AGENTS env
+        if (agentsEnvString) {
+          await updateWranglerWithAgents(
+            `${telegramPath}/wrangler.jsonc`,
+            agentsEnvString
+          );
+        }
+
+        const result = await deployAgent({
+          name: "telegram-bot-agent",
+          path: telegramPath,
+          wranglerConfig: `${telegramPath}/wrangler.jsonc`,
+        });
+
+        if (result.success) {
+          telegramUrl = result.url || "";
+          logger.info(chalk.green(`   ✓ Telegram Bot → ${result.url || "deployed"}`));
+          
+          // Set webhook
+          if (result.url) {
+            const webhookSet = await setTelegramWebhook(telegramToken, result.url);
+            if (webhookSet) {
+              logger.info(chalk.green("   ✓ Telegram webhook configured"));
+            } else {
+              logger.warn(chalk.yellow("   ⚠️ Failed to configure webhook"));
+            }
+          }
+        } else {
+          const errorInfo = parseCloudflareError(result.error || "Unknown error");
+          logger.info("\n" + formatErrorInline(errorInfo, "Telegram Bot"));
+        }
+      }
+
+      // Final summary with all URLs
+      logger.info(chalk.gray("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"));
+      logger.info(chalk.green.bold("✅ Done!\n"));
+      
+      // Collect all successful deployments
+      const successfulMcp = mcpResults.filter(r => r.success && r.url);
+      const successfulAgents = agentResults.filter(r => r.success && r.url);
+      
+      if (successfulMcp.length > 0) {
+        logger.info(chalk.white.bold("🔧 MCP Servers:"));
+        for (const mcp of successfulMcp) {
+          logger.info(chalk.gray(`   ${mcp.name}: `) + chalk.cyan(mcp.url));
+        }
+        console.log("");
+      }
+      
+      if (successfulAgents.length > 0) {
+        logger.info(chalk.white.bold("🤖 AI Agents:"));
+        for (const agent of successfulAgents) {
+          logger.info(chalk.gray(`   ${agent.name}: `) + chalk.cyan(agent.url));
+        }
+        console.log("");
+      }
+      
+      if (playgroundUrl || telegramUrl) {
+        logger.info(chalk.white.bold("🖥️  Interfaces:"));
+        if (playgroundUrl) {
+          logger.info(chalk.gray("   Web Chat: ") + chalk.cyan(playgroundUrl));
+        }
+        if (telegramUrl) {
+          logger.info(chalk.gray("   Telegram Bot Backend: ") + chalk.cyan(telegramUrl));
+        }
+        console.log("");
+      }
+      
+      // Quick access hint
+      if (playgroundUrl) {
+        logger.info(chalk.white(`🚀 Quick start: `) + chalk.cyan(playgroundUrl));
+      }
+      console.log("");
+
+    } catch (error) {
+      logger.error(chalk.red("❌ Deployment failed"));
       handleError(error);
     } finally {
       // Restore original working directory

@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createDeepSeek } from "@ai-sdk/deepseek";
+import { createXai } from "@ai-sdk/xai";
 import { LanguageModel, Provider, stepCountIs } from "ai";
 
 import {
@@ -61,27 +64,45 @@ app.all("/agent/chat/:sessionId?", async (c) => {
   return await AGENT.get(id).fetch(forwardRequest);
 });
 
-//
 export class DependentAgent extends AiSdkAgent<Env> {
   constructor(state: DurableObjectState, env: Env) {
-    // Use string model identifier - AI SDK v5 supports this directly
-		let provider: Provider;
-		let model: LanguageModel;
-		switch (env.AI_PROVIDER) {
-		  case "anthropic":
-			provider = createAnthropic({
-			  apiKey: env.AI_PROVIDER_API_KEY,
-			});
-	
-			// Get the actual model object
-			model = provider.languageModel(env.MODEL_ID);
-			break;
-		  default:
-			// This should never happen due to validation above, but TypeScript requires this
-			throw new Error(`Unsupported AI provider: ${env.AI_PROVIDER}`);
-		}
-	
-		super(state, env, model, [new ToolboxService(env, mcpConfig)]);
+    let provider: Provider;
+    let model: LanguageModel;
+
+    switch (env.AI_PROVIDER) {
+      case "anthropic":
+        provider = createAnthropic({
+          apiKey: env.AI_PROVIDER_API_KEY,
+        });
+        model = provider.languageModel(env.MODEL_ID || "claude-3-haiku-20240307");
+        break;
+
+      case "openai":
+        provider = createOpenAI({
+          apiKey: env.AI_PROVIDER_API_KEY,
+        });
+        model = provider.languageModel(env.MODEL_ID || "gpt-4o-mini");
+        break;
+
+      case "deepseek":
+        provider = createDeepSeek({
+          apiKey: env.AI_PROVIDER_API_KEY,
+        });
+        model = provider.languageModel(env.MODEL_ID || "deepseek-chat");
+        break;
+
+      case "grok":
+        provider = createXai({
+          apiKey: env.AI_PROVIDER_API_KEY,
+        });
+        model = provider.languageModel(env.MODEL_ID || "grok-beta");
+        break;
+
+      default:
+        throw new Error(`Unsupported AI provider: ${env.AI_PROVIDER}. Supported: anthropic, openai, deepseek, grok`);
+    }
+
+    super(state, env, model, [new ToolboxService(env, mcpConfig)]);
   }
 
   async processMessage(

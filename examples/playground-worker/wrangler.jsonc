@@ -1,0 +1,44 @@
+/**
+ * Playground Worker - Simple chat interface for AI agents
+ * 
+ * This worker provides a web interface to chat with AI agents deployed on Cloudflare Workers.
+ * It uses Service Bindings for reliable Worker-to-Worker communication.
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "playground-worker",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-02-11",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
+	},
+	/**
+	 * Service Bindings (communicate between multiple Workers)
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
+	 * 
+	 * Service bindings allow direct communication between Workers without HTTP
+	 * This is more reliable than HTTP fetch for Worker-to-Worker communication
+	 */
+	"services": [
+		{
+			"binding": "AGENT_SERVICE",
+			"service": "simple-prompt-agent"
+		},
+		{
+			"binding": "DEPENDENT_AGENT_SERVICE",
+			"service": "agent-dependencies"
+		}
+	],
+	/**
+	 * Environment Variables
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+	 */
+	"vars": {
+		"AGENT_URL": "https://simple-prompt-agent.gribaart.workers.dev",  // Default agent URL
+		// AGENTS format: "name1|url1|description1,name2|url2|description2"
+		// Example: "Simple Agent|https://agent1.workers.dev|Default assistant,Queue Agent|https://agent2.workers.dev|Async processing"
+		"AGENTS": "Simple Prompt Agent|https://simple-prompt-agent.gribaart.workers.dev,Dependent Agent|https://agent-dependencies.gribaart.workers.dev"
+	}
+}

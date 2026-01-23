@@ -1,0 +1,27 @@
+{
+	"name": "playground-worker",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev --local --port 8790",
+		"dev:remote": "wrangler dev --remote --port 8790",
+		"deploy": "wrangler deploy",
+		"cf-typegen": "wrangler types",
+		"build": "wrangler build",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"hono": "^4.7.7"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20250115.0",
+		"typescript": "^5.9.2",
+		"wrangler": "^4.35.0"
+	},
+	"description": "Простой веб-интерфейс для чата с AI агентами, развернутый как Cloudflare Worker.",
+	"main": "index.js",
+	"keywords": [],
+	"author": "",
+	"license": "ISC"
+}

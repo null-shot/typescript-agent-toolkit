@@ -96,7 +96,7 @@ export class MigrationManager {
     wranglerConfigPath: string, 
     databaseBinding: string
   ): Promise<void> {
-    const command = `wrangler d1 migrations apply ${databaseBinding} --local --config ${wranglerConfigPath}`;
+    const command = `npx wrangler d1 migrations apply ${databaseBinding} --local --config ${wranglerConfigPath}`;
 
     if (this.dryRunManager?.isEnabled()) {
       logger.info(`[DRY RUN] Would execute: ${command}`);
