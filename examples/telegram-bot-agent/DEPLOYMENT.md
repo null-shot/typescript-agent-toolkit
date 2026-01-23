@@ -119,7 +119,7 @@ wrangler kv:namespace create SESSIONS
 ```bash
 # Установить Telegram Bot Token
 wrangler secret put TELEGRAM_BOT_TOKEN
-# Введите значение: 8043373726:AAGMn9IGGO_1XSQylpOorBiQNK-KZWF_xyY
+# Введите значение: YOUR_BOT_TOKEN (получите у @BotFather)
 
 # Опционально: Webhook secret для безопасности
 wrangler secret put TELEGRAM_WEBHOOK_SECRET
