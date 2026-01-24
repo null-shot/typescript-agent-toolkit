@@ -13,6 +13,9 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.9",
+    "@ai-sdk/openai": "^2.0.9",
+    "@ai-sdk/deepseek": "^0.1.0",
+    "@ai-sdk/xai": "^1.0.0",
     "@nullshot/agent": "workspace:*",
     "ai": "catalog:",
     "hono": "^4.7.11",

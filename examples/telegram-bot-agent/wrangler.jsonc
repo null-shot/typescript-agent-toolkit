@@ -1,0 +1,52 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "telegram-bot-agent",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-04-22",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": {
+		"enabled": true
+	},
+	"kv_namespaces": [
+		{
+			"binding": "SESSIONS",
+			"id": "48541ff7cfdb425daa48d360a11b2050",  // Production KV namespace
+			"preview_id": "34d6349e6999403380f451aec26c50e0"  // Preview KV namespace (для локальной разработки)
+		}
+	],
+	/**
+	 * Environment Variables
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+	 */
+	"vars": {
+		"AGENT_URL": "https://simple-prompt-agent.gribaart.workers.dev",  // Default agent URL (fallback)
+		// AGENTS format: "name1|url1|description1,name2|url2|description2"
+		// Example: "Simple Agent|https://agent1.workers.dev|Default assistant,Queue Agent|https://agent2.workers.dev|Async processing"
+		// Set via: wrangler secret put AGENTS (or as env var for multiple agents)
+		"AGENTS": "Simple Prompt Agent|https://simple-prompt-agent.gribaart.workers.dev,Dependent Agent|https://agent-dependencies.gribaart.workers.dev"
+	},
+	/**
+	 * Service Bindings (communicate between multiple Workers)
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
+	 * 
+	 * Service bindings allow direct communication between Workers without HTTP
+	 * This is more reliable than HTTP fetch for Worker-to-Worker communication
+	 */
+	"services": [
+		{
+			"binding": "AGENT_SERVICE",
+			"service": "simple-prompt-agent"
+		}
+	],
+	/**
+	 * Note: Use secrets to store sensitive data.
+	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 * 
+	 * Set secrets with:
+	 * wrangler secret put TELEGRAM_BOT_TOKEN
+	 */
+}

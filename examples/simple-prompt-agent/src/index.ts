@@ -245,8 +245,15 @@ export class SimplePromptAgent extends AiSdkAgent<Env> {
 
 
 	async processMessage(sessionId: string, messages: AIUISDKMessage): Promise<Response> {
+		console.log('🚀 processMessage called in SimplePromptAgent');
+		console.log('📋 Session ID:', sessionId);
+		console.log('📨 Messages count:', messages.messages?.length || 0);
+		console.log('🔑 AI_PROVIDER:', this.env.AI_PROVIDER);
+		console.log('🔑 USE_MOCK_AI:', this.env.USE_MOCK_AI);
+		
 		// Mock mode: return deterministic response without calling AI
 		if (this.env.USE_MOCK_AI === 'true') {
+			console.log('🎭 Using mock AI mode');
 			const last = messages.messages[messages.messages.length - 1];
 			const userText = typeof last?.content === 'string' ? last.content : 'Hello';
 			const reply = `Mock response: I received your message "${userText}". This is a mock response for local testing without API keys.`;
@@ -259,28 +266,102 @@ export class SimplePromptAgent extends AiSdkAgent<Env> {
 			});
 		}
 
-		// Use the protected streamTextWithMessages method - model is handled automatically by the agent
-		const result = await this.streamTextWithMessages(sessionId, messages.messages, {
-			system: 'You will use tools to help manage and mark off tasks on a todo list.',
-			maxSteps: 10,
-			stopWhen: stepCountIs(10),
-			// Enable MCP tools from imported mcp.json
-			experimental_toolCallStreaming: true,
-			onError: (error: unknown) => {
-				console.error('Error processing message', error);
-			},
-		});
+		try {
+			console.log('🤖 Starting AI processing...');
+			console.log('🔑 AI_PROVIDER value:', this.env.AI_PROVIDER);
+			console.log('🔑 AI_PROVIDER type:', typeof this.env.AI_PROVIDER);
+			
+			if (!this.env.AI_PROVIDER) {
+				console.error('❌ AI_PROVIDER is undefined!');
+				throw new Error('AI_PROVIDER is not set. Please set it via wrangler secret put AI_PROVIDER');
+			}
+			
+			// Use the protected streamTextWithMessages method - model is handled automatically by the agent
+			const result = await this.streamTextWithMessages(sessionId, messages.messages, {
+				system: 'You will use tools to help manage and mark off tasks on a todo list.',
+				maxSteps: 10,
+				stopWhen: stepCountIs(10),
+				// Enable MCP tools from imported mcp.json
+				experimental_toolCallStreaming: true,
+				onError: (error: unknown) => {
+					console.error('❌ Error in streamTextWithMessages:', error);
+				},
+			});
 
-		// Use toTextStreamResponse() which returns SSE format
-		// The response format is: 0:"text" or data: {"type":"text-delta","delta":"..."}
-		return result.toTextStreamResponse();
+			console.log('✅ AI processing completed, converting to response...');
+			// Use toTextStreamResponse() which returns SSE format
+			// The response format is: 0:"text" or data: {"type":"text-delta","delta":"..."}
+			const response = result.toTextStreamResponse();
+			console.log('✅ Response created');
+			return response;
+		} catch (error) {
+			console.error('❌ Error in processMessage:', error);
+			if (error instanceof Error) {
+				console.error('❌ Error message:', error.message);
+				console.error('❌ Error stack:', error.stack);
+				console.error('❌ Error name:', error.name);
+			}
+			// Return error response instead of throwing
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+			console.error('❌ Returning error response:', errorMessage);
+			return new Response(
+				`0:"Sorry, I encountered an error: ${errorMessage}"`,
+				{
+					status: 200, // Return 200 to avoid breaking the client
+					headers: {
+						'Content-Type': 'text/plain; charset=utf-8',
+						'X-Session-Id': sessionId,
+					}
+				}
+			);
+		}
 	}
 }
 
 // Export the worker handler
+// SimplePromptAgent is already exported above as: export class SimplePromptAgent
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		// Bootstrap the agent worker with the namespace
-		return app.fetch(request, env, ctx);
+		const url = new URL(request.url);
+		const pathname = url.pathname;
+		
+		console.log('🚀 Worker: Request received');
+		console.log('🚀 Worker: URL:', request.url);
+		console.log('🚀 Worker: Method:', request.method);
+		console.log('🚀 Worker: Path:', pathname);
+		console.log('🚀 Worker: Has AGENT binding:', !!env.AGENT);
+		
+		// Check if this is an agent chat request
+		if (pathname.startsWith('/agent/chat/')) {
+			console.log('🚀 Worker: This is an agent chat request');
+			console.log('🚀 Worker: AGENT binding type:', typeof env.AGENT);
+			if (env.AGENT) {
+				console.log('🚀 Worker: AGENT.idFromName exists:', typeof env.AGENT.idFromName === 'function');
+			}
+		}
+		
+		try {
+			const response = await app.fetch(request, env, ctx);
+			console.log('🚀 Worker: Response status:', response.status);
+			console.log('🚀 Worker: Response headers:', Object.fromEntries(response.headers.entries()));
+			return response;
+		} catch (error) {
+			console.error('❌ Worker: Error in fetch:', error);
+			if (error instanceof Error) {
+				console.error('❌ Worker: Error message:', error.message);
+				console.error('❌ Worker: Error stack:', error.stack);
+			}
+			// Return error response instead of throwing
+			return new Response(
+				JSON.stringify({ 
+					error: 'Internal server error', 
+					message: error instanceof Error ? error.message : 'Unknown error' 
+				}),
+				{ 
+					status: 500,
+					headers: { 'Content-Type': 'application/json' }
+				}
+			);
+		}
 	},
 };

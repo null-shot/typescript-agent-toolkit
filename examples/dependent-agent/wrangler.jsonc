@@ -30,11 +30,11 @@
     "AI_PROVIDER": "anthropic"
   },
   "services": [
-    {
-      "binding": "MCP_SERVICE",
-      "service": "mcp"
-    }
-  ],
+	  {
+	    "binding": "MCP_SERVICE",
+	    "service": "crud-mcp"
+	  }
+	],
   "compatibility_flags": [
     "nodejs_compat"
   ]
