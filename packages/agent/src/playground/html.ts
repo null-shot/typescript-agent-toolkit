@@ -105,16 +105,25 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 				<button class="sp-modal-close" id="spModalClose">&times;</button>
 			</div>
 			<div class="sp-modal-body">
-				<div class="sp-modal-hint">Choose a persona template or write your own. Saved in your browser.</div>
+				<div class="sp-modal-hint">Choose a template or pick from your saved prompts.</div>
 				<div class="sp-templates" id="spTemplates"></div>
-				<textarea id="systemPromptInput" class="sp-textarea" rows="10" placeholder="You are a friendly AI assistant..."></textarea>
+				<div id="spSavedSection" style="margin-top:8px">
+					<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+						<span style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">My Prompts</span>
+					</div>
+					<div class="sp-templates" id="spSavedList"></div>
+				</div>
+				<div id="spNameRow" style="display:none;margin-bottom:6px;gap:8px;align-items:center">
+					<input type="text" id="spSaveAsName" placeholder="Custom Prompt" value="Custom Prompt" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px">
+				</div>
+				<textarea id="systemPromptInput" class="sp-textarea" rows="10" placeholder="Write your custom prompt here..."></textarea>
 			</div>
 			<div class="sp-modal-options">
 				<label class="sp-option-toggle"><input type="checkbox" id="autoVoiceCheck"><span>Auto Voice</span></label>
 			</div>
 			<div class="sp-modal-footer">
-				<button class="action-btn" id="spResetBtn">Reset to Default</button>
-				<button class="action-btn primary" id="spSaveBtn">Save</button>
+				<button class="action-btn" id="spSaveLibBtn" style="display:none">Save to My Prompts</button>
+				<button class="action-btn primary" id="spSaveBtn">Use</button>
 			</div>
 		</div>
 	</div>
@@ -1302,14 +1311,15 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 			html += '<label class="schedule-option" style="font-size:12px"><input type="checkbox" id="postGenerateAI" checked onchange="updateContentPlaceholder()"/> Generate with AI</label>';
 			html += '</div></div>';
 			html += '<div style="margin-bottom:8px"><label class="field-label">Format</label>';
-			html += '<select class="setting-select" id="postFormat" style="max-width:200px">';
+			html += '<select class="setting-select" id="postFormat" style="max-width:200px" onchange="updateAutoFormatHint()">';
 			html += '<option value="auto">Auto (AI chooses)</option>';
 			html += '<option value="text">Text only</option>';
 			html += '<option value="photo">Photo + caption</option>';
 			html += '<option value="voice">Voice message</option>';
 			html += '<option value="poll">Poll</option>';
 			html += '</select>';
-			html += '<span class="text-muted-xs" style="margin-left:8px">Voice = TTS (EN,ES,FR,ZH,JA,KO). Poll = voting.</span></div>';
+			html += '<span class="text-muted-xs" style="margin-left:8px">Voice = TTS (EN,ES,FR,ZH,JA,KO). Poll = voting.</span>';
+			html += '<div id="autoFormatHint" class="text-muted-xs" style="margin-top:4px;display:none">Recurring: AI rotates formats (text → voice → photo → poll) and builds a connected narrative across posts.</div></div>';
 			html += '<textarea class="setting-textarea" id="postContent" rows="5" placeholder="Describe what to post about... e.g. &quot;AI meetup this Friday, link: https://...&quot;"></textarea>';
 			html += '<div id="aiHint" class="text-muted-xs" style="margin-top:4px">AI will generate an engaging post based on your description and Knowledge Base.</div>';
 			html += '<div id="rawHint" class="text-muted-xs" style="margin-top:4px;display:none">Text will be published exactly as written.</div>';
@@ -1523,8 +1533,16 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 			const cronSection = document.getElementById('scheduleCron');
 			if (dtSection) dtSection.style.display = type === 'scheduled' ? 'block' : 'none';
 			if (cronSection) cronSection.style.display = type === 'recurring' ? 'block' : 'none';
+			window.updateAutoFormatHint?.();
 		};
 		
+		window.updateAutoFormatHint = function() {
+			const fmt = document.getElementById('postFormat')?.value;
+			const type = document.querySelector('input[name="postScheduleType"]:checked')?.value || 'now';
+			const hint = document.getElementById('autoFormatHint');
+			if (hint) hint.style.display = (fmt === 'auto' && type === 'recurring') ? 'block' : 'none';
+		};
+
 		window.updateCronFromPreset = function() {
 			const preset = document.getElementById('postCronPreset')?.value;
 			const cronInput = document.getElementById('postCronExpr');
@@ -2743,7 +2761,7 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 		const spModal = document.getElementById('systemPromptModal');
 		const spInput = document.getElementById('systemPromptInput');
 		const spSaveBtn = document.getElementById('spSaveBtn');
-		const spResetBtn = document.getElementById('spResetBtn');
+		const spSaveLibBtn = document.getElementById('spSaveLibBtn');
 		const spCloseBtn = document.getElementById('spModalClose');
 		const spBtn = document.getElementById('systemPromptBtn');
 		const spTemplatesEl = document.getElementById('spTemplates');
@@ -2778,8 +2796,22 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 			  prompt:'You are a professional front-desk receptionist. Polite, efficient, organized. Greet warmly, manage scheduling, answer FAQs, route requests. Know business hours, policies, and contacts. Take messages carefully. Never overshare. Calm under pressure, handle difficult visitors gracefully. Always confirm details.' },
 			{ id:'salesman', label:'Sales Agent',
 			  prompt:'You are a sharp, charismatic sales agent. Build rapport fast, identify needs through questions, present solutions confidently. Handle objections with empathy and reframing. Create urgency without pressure. Know the product inside out. Close deals naturally. Follow up proactively. Never pushy, always consultative.' },
-			{ id:'custom', label:'Custom', prompt:'' }
 		];
+
+		const SAVED_PROMPTS_KEY = 'sp_custom_prompts';
+		const spSavedList = document.getElementById('spSavedList');
+		const spSavedSection = document.getElementById('spSavedSection');
+		const spNameRow = document.getElementById('spNameRow');
+		const spSaveAsName = document.getElementById('spSaveAsName');
+		var spIsCustomMode = false;
+		var spEditingIdx = -1;
+
+		function getSavedCustomPrompts() {
+			try { return JSON.parse(localStorage.getItem(SAVED_PROMPTS_KEY) || '[]'); } catch { return []; }
+		}
+		function setSavedCustomPrompts(list) {
+			localStorage.setItem(SAVED_PROMPTS_KEY, JSON.stringify(list));
+		}
 
 		function getSystemPromptKey() {
 			return currentAgent ? 'system_prompt_' + currentAgent.id : null;
@@ -2791,35 +2823,105 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 			return localStorage.getItem(key);
 		}
 
+		function isBuiltinPrompt(text) {
+			return SP_TEMPLATES.some(function(t) { return t.prompt === text; });
+		}
+
+		function clearAllActive() {
+			spTemplatesEl.querySelectorAll('.sp-tpl-btn').forEach(function(b) { b.classList.remove('active'); });
+			spSavedList.querySelectorAll('.sp-tpl-btn').forEach(function(b) { b.classList.remove('active'); });
+		}
+
+		function enterCustomMode(name, prompt) {
+			spIsCustomMode = true;
+			spNameRow.style.display = 'flex';
+			spSaveLibBtn.style.display = '';
+			spSaveAsName.value = name || 'Custom Prompt';
+			spInput.value = prompt || '';
+			clearAllActive();
+			spTemplatesEl.querySelector('.sp-tpl-btn:last-child').classList.add('active');
+			spInput.focus();
+		}
+
+		function exitCustomMode() {
+			spIsCustomMode = false;
+			spEditingIdx = -1;
+			spNameRow.style.display = 'none';
+			spSaveLibBtn.style.display = 'none';
+		}
+
 		function renderTemplates(activePrompt) {
 			spTemplatesEl.innerHTML = '';
 			SP_TEMPLATES.forEach(function(t) {
 				var btn = document.createElement('button');
 				btn.className = 'sp-tpl-btn';
-				var isCustom = t.id === 'custom';
-				var isActive = isCustom
-					? (activePrompt && !SP_TEMPLATES.slice(0, -1).some(function(x) { return x.prompt === activePrompt; }))
-					: (t.prompt === activePrompt || (!activePrompt && t.id === 'default'));
+				var isActive = t.prompt === activePrompt || (!activePrompt && t.id === 'default');
 				if (isActive) btn.classList.add('active');
 				btn.innerHTML = '<span class="sp-tpl-label">' + t.label + '</span>';
 				btn.addEventListener('click', function() {
-					if (isCustom) {
-						spInput.value = '';
-						spInput.focus();
-					} else {
-						spInput.value = t.prompt;
-					}
-					spTemplatesEl.querySelectorAll('.sp-tpl-btn').forEach(function(b) { b.classList.remove('active'); });
+					exitCustomMode();
+					spInput.value = t.prompt;
+					clearAllActive();
 					btn.classList.add('active');
 				});
 				spTemplatesEl.appendChild(btn);
 			});
+			var customBtn = document.createElement('button');
+			customBtn.className = 'sp-tpl-btn';
+			customBtn.innerHTML = '<span class="sp-tpl-label">+ Custom</span>';
+			customBtn.addEventListener('click', function() {
+				spEditingIdx = -1;
+				enterCustomMode('Custom Prompt', '');
+			});
+			spTemplatesEl.appendChild(customBtn);
+		}
+
+		function renderSavedPrompts(activePrompt) {
+			var saved = getSavedCustomPrompts();
+			spSavedSection.style.display = saved.length ? '' : 'none';
+			spSavedList.innerHTML = '';
+			saved.forEach(function(item, idx) {
+				var btn = document.createElement('button');
+				btn.className = 'sp-tpl-btn';
+				if (item.prompt === activePrompt && !isBuiltinPrompt(activePrompt)) btn.classList.add('active');
+				btn.innerHTML = '<span class="sp-tpl-label">' + escapeHtml(item.name) + '</span>';
+				btn.addEventListener('click', function() {
+					spEditingIdx = idx;
+					enterCustomMode(item.name, item.prompt);
+					clearAllActive();
+					btn.classList.add('active');
+				});
+				btn.addEventListener('contextmenu', function(e) {
+					e.preventDefault();
+					if (confirm('Delete \\u201c' + item.name + '\\u201d?')) {
+						var list = getSavedCustomPrompts();
+						list.splice(idx, 1);
+						setSavedCustomPrompts(list);
+						if (spEditingIdx === idx) exitCustomMode();
+						renderSavedPrompts(spInput.value);
+					}
+				});
+				spSavedList.appendChild(btn);
+			});
 		}
 
 		function openSystemPromptModal() {
+			exitCustomMode();
 			var saved = getSavedSystemPrompt();
 			spInput.value = saved || SP_DEFAULT;
 			renderTemplates(spInput.value);
+			renderSavedPrompts(spInput.value);
+			var customList = getSavedCustomPrompts();
+			var matchIdx = customList.findIndex(function(p) { return p.prompt === spInput.value; });
+			if (matchIdx >= 0 && !isBuiltinPrompt(spInput.value)) {
+				spEditingIdx = matchIdx;
+				spIsCustomMode = true;
+				spNameRow.style.display = 'flex';
+				spSaveLibBtn.style.display = '';
+				spSaveAsName.value = customList[matchIdx].name;
+			} else if (saved && !isBuiltinPrompt(saved)) {
+				enterCustomMode('Custom Prompt', saved);
+			}
 			loadModalOptions();
 			spModal.style.display = 'flex';
 			spInput.focus();
@@ -2835,7 +2937,7 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 			if (e.target === spModal) closeSystemPromptModal();
 		});
 
-		spSaveBtn.addEventListener('click', function() {
+		function applyPromptToAgent() {
 			var key = getSystemPromptKey();
 			if (!key) return;
 			var val = spInput.value.trim();
@@ -2846,14 +2948,27 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 			}
 			var avKey = getAutoVoiceKey();
 			if (avKey) { autoVoiceCheck.checked ? localStorage.setItem(avKey, '1') : localStorage.removeItem(avKey); }
+		}
+
+		spSaveBtn.addEventListener('click', function() {
+			applyPromptToAgent();
 			closeSystemPromptModal();
 		});
 
-		spResetBtn.addEventListener('click', function() {
-			var key = getSystemPromptKey();
-			if (key) localStorage.removeItem(key);
-			spInput.value = SP_DEFAULT;
-			renderTemplates(SP_DEFAULT);
+		spSaveLibBtn.addEventListener('click', function() {
+			var val = spInput.value.trim();
+			if (!val) return;
+			var name = spSaveAsName.value.trim() || 'Custom Prompt';
+			var list = getSavedCustomPrompts();
+			if (spEditingIdx >= 0 && spEditingIdx < list.length) {
+				list[spEditingIdx] = { name: name, prompt: val };
+			} else {
+				list.push({ name: name, prompt: val });
+				spEditingIdx = list.length - 1;
+			}
+			setSavedCustomPrompts(list);
+			applyPromptToAgent();
+			closeSystemPromptModal();
 		});
 
 		// Check agent health

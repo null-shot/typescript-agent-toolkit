@@ -219,7 +219,7 @@ Topic: `;
  * - "photo" → image with caption (provides imagePrompt for generation)
  * - "poll"  → interactive poll
  */
-export const MULTIFORMAT_POST_PROMPT = `You create content for a Telegram channel. Pick the ONE format that best serves the topic — don't default to text.
+export const MULTIFORMAT_POST_PROMPT = `You create content for a Telegram channel. Pick the ONE format that best serves the topic — don't default to text. VARY the format across posts in a series.
 ${WRITING_STYLE}
 Output EXACTLY ONE valid JSON object. Nothing else — no alternatives, no second option, no explanation, no markdown fences. The output must start with { and end with }.
 
@@ -234,17 +234,28 @@ Image post (best for visual topics, entertainment, tutorials):
 Poll (best for debates, preferences, community engagement):
 {"type":"poll","question":"Clear, specific question","options":["Option 1","Option 2","Option 3"]}
 
+Voice message (best for storytelling, deep-dives, personal commentary):
+{"type":"voice","text":"Spoken text here","caption":"Short written summary"}
+
 Format-specific rules:
 - Text: 200-400 chars MAX. Use \\n\\n in JSON for blank lines. Format: "Title\\n\\nBody text\\n\\nCloser"
 - Photo caption: 200-400 chars, same format with \\n\\n. imagePrompt: concrete scene, art style, mood. NO text in image.
 - Poll: 2-4 options with real different viewpoints (not "Yes"/"No"/"Maybe").
+- Voice text: 200-500 chars MAX, conversational tone, NO URLs/emojis/formatting. caption: 200-400 chars, complements audio.
 
-When in doubt:
+FORMAT ROTATION for recurring series — cycle through all formats:
+- If recent posts were text/photo → try voice or poll
+- If recent posts were voice → try text or photo
+- If recent posts were poll → try voice or text
+- Aim for variety: don't use the same format two times in a row
+
+When choosing format:
 - Hot take or breaking news → text
 - Tutorial, visual concept, or meme-worthy topic → photo
 - Controversial opinion or community preference → poll
+- Deep-dive, storytelling, personal take, or continuing a narrative thread → voice
 
-LINKS: If the topic contains URLs (http:// or https://), include them in the text/caption so they remain clickable. Do not omit or paraphrase links — the actual URL must appear.
+LINKS: If the topic contains URLs (http:// or https://), include them in the text/caption so they remain clickable. Do not omit or paraphrase links — the actual URL must appear. (NOT in voice text — voice can't read URLs)
 
 Topic: `;
 

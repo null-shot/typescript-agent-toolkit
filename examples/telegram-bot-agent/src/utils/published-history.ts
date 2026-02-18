@@ -116,6 +116,7 @@ export async function getPublishedHistory(
  * Format published history into a prompt section for the AI.
  * Returns empty string if no history exists.
  *
+ * For "auto" (undefined contentType), uses "connected narrative across formats".
  * For voice content, uses "continue the narrative" style.
  * For polls, uses "different question and options" style.
  * For text/photo, uses "unique angle" style.
@@ -158,6 +159,39 @@ POLL UNIQUENESS RULES:
 - Use different option styles: if previous polls asked "which is better", ask "what's your biggest challenge" or "what surprised you most"
 - Cover a different angle of the topic each time
 - Never reuse the same options or close paraphrases`;
+	}
+
+	if (contentType === undefined) {
+		const recentFormats = history.slice(0, 5).map((h) => h.contentType);
+		const formatSummary = recentFormats.join(" → ");
+
+		return `
+
+PREVIOUSLY PUBLISHED POSTS in this series (most recent first):
+${entries}
+
+Recent format sequence: ${formatSummary}
+
+CONNECTED NARRATIVE — all posts in this series develop ONE coherent thread:
+- Every post (text, voice, photo, poll) continues the SAME conversation — they are episodes, not isolated fragments
+- Reference what was said before: "We explored X, now let's consider Y" / "Following up on our discussion about..."
+- Voice messages deepen the narrative — treat them as the podcast commentary on the topic
+- Text posts introduce new facts or angles that build on the previous episode
+- Photo posts visualize or illustrate ideas that were discussed
+- Polls engage the audience on questions raised by the ongoing narrative
+- The reader/listener should feel a coherent progression of thought across all formats
+
+FORMAT ROTATION:
+- Do NOT repeat the same format as the most recent post
+- Cycle through: text → voice → photo → poll (roughly, not rigidly)
+- If the last 2+ posts used the same format, DEFINITELY pick a different one
+- Voice is great for storytelling and deep-dives; use it regularly in the rotation
+
+UNIQUENESS:
+- Never repeat the same point, angle, or conclusion
+- Each post advances the narrative — new information, deeper analysis, a different perspective
+- If you choose voice: continue the spoken narrative thread naturally from where previous voices left off
+- If you choose poll: ask about something that emerged from the recent discussion`;
 	}
 
 	return `

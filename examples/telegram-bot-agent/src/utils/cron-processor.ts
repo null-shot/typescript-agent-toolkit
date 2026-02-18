@@ -282,12 +282,18 @@ export async function processKanbanRecurringTasks(
             parseFormatHints(topic);
           const imagesEnabled =
             (await env.SESSIONS?.get("setting:image_with_posts")) !== "false";
-          const basePrompt = await getPromptForFormatAsync(
-            recurringFormat,
-            !!env.AI,
-            imagesEnabled,
-            env.SESSIONS,
-          );
+
+          // For recurring "auto" format, always use MULTIFORMAT prompt to enable
+          // format rotation (text/photo/voice/poll) instead of defaulting to photo-only
+          const basePrompt =
+            recurringFormat === "auto"
+              ? MULTIFORMAT_POST_PROMPT
+              : await getPromptForFormatAsync(
+                  recurringFormat,
+                  !!env.AI,
+                  imagesEnabled,
+                  env.SESSIONS,
+                );
 
           // Load published history so the AI can avoid repeating itself
           const publishedHistory = await getPublishedHistory(
@@ -304,7 +310,9 @@ export async function processKanbanRecurringTasks(
               ? `\n\nThis is poll #${task.runCount + 1} in a recurring series. The topic may contain example polls — treat them as inspiration for theme and style ONLY. Invent a completely NEW question with NEW options. Never repeat a previous poll.`
               : recurringFormat === "voice"
                 ? `\n\nThis is voice message #${task.runCount + 1} in a recurring series. Continue and develop the narrative — build on what was said before.`
-                : `\n\nThis is post #${task.runCount + 1} in a recurring series. Each post MUST be completely different from all previous ones.`;
+                : recurringFormat === "auto"
+                  ? `\n\nThis is post #${task.runCount + 1} in an ongoing series. You are building a connected narrative — each post develops the same thread of thought across different formats (text, voice, photo, poll). Pick a DIFFERENT format from the most recent post. If you choose voice, continue the spoken narrative. All formats should feel like episodes in a series.`
+                  : `\n\nThis is post #${task.runCount + 1} in a recurring series. Each post MUST be completely different from all previous ones.`;
 
           const contentMessages = [
             {
@@ -402,24 +410,43 @@ export async function processKanbanRecurringTasks(
                 caption,
               });
               log.info("Wrapped plain-text as voice post", { taskId: task.id });
-            } else if (recurringFormat === "auto" && imagesEnabled) {
-              // Extract keywords from generated content for a specific image prompt
-              const keyWords = content
-                .replace(/[^\p{L}\p{N}\s]/gu, " ")
-                .split(/\s+/)
-                .filter((w) => w.length > 4)
-                .slice(0, 8)
-                .join(", ");
-              const imagePromptText = `Flat vector editorial illustration. Topic: ${recurringTopic.slice(0, 120)}. Key concepts: ${keyWords}. Minimal clean design, warm tones, no text in image.`;
+            } else if (recurringFormat === "auto") {
+              // For auto format, rotate: check recent history to pick a different format
+              const recentHistory = await getPublishedHistory(
+                env.SESSIONS,
+                task.id,
+              );
+              const lastFormat = recentHistory[0]?.contentType;
+              const useVoice =
+                lastFormat && lastFormat !== "voice" && task.runCount % 3 === 1;
 
-              content = JSON.stringify({
-                type: "photo",
-                imagePrompt: imagePromptText,
-                caption,
-              });
-              log.info("Wrapped plain-text AI response as image post", {
-                taskId: task.id,
-              });
+              if (useVoice) {
+                content = JSON.stringify({
+                  type: "voice",
+                  text: content,
+                  caption,
+                });
+                log.info("Wrapped plain-text as voice post (auto rotation)", {
+                  taskId: task.id,
+                });
+              } else if (imagesEnabled) {
+                const keyWords = content
+                  .replace(/[^\p{L}\p{N}\s]/gu, " ")
+                  .split(/\s+/)
+                  .filter((w) => w.length > 4)
+                  .slice(0, 8)
+                  .join(", ");
+                const imagePromptText = `Flat vector editorial illustration. Topic: ${recurringTopic.slice(0, 120)}. Key concepts: ${keyWords}. Minimal clean design, warm tones, no text in image.`;
+
+                content = JSON.stringify({
+                  type: "photo",
+                  imagePrompt: imagePromptText,
+                  caption,
+                });
+                log.info("Wrapped plain-text AI response as image post", {
+                  taskId: task.id,
+                });
+              }
             }
           }
         } else {
