@@ -7,7 +7,7 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { Agent, AgentHealthStatus, DEFAULT_AGENT, getDefaultAgent, loadRuntimeConfig } from "@/lib/config";
+import { Agent, AgentHealthStatus, getDefaultAgent, loadRuntimeConfig } from "@/lib/config";
 import { saveCustomAgent, validateAgentUrl } from "@/lib/agent-storage";
 import { createAgentStorage, setupStorageSync } from "@/lib/agent-persistence";
 
@@ -174,7 +174,6 @@ export function AgentProvider({
         }, 100);
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   const [state, dispatch] = useReducer(agentReducer, {

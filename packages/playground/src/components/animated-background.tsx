@@ -1,8 +1,20 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
+
+const ORB_COUNT = 6;
+
+interface OrbConfig {
+  background: string;
+  size: number;
+  initialX: number;
+  initialY: number;
+  targetX: number;
+  targetY: number;
+  duration: number;
+}
 
 export function AnimatedBackground() {
   const [mounted, setMounted] = useState(false);
@@ -11,9 +23,30 @@ export function AnimatedBackground() {
     setMounted(true);
   }, []);
 
+  // Memoize orb configurations so random values are stable across re-renders
+  const orbConfigs = useMemo<OrbConfig[]>(() => {
+    const width = typeof window !== "undefined" ? window.innerWidth : 1024;
+    const height = typeof window !== "undefined" ? window.innerHeight : 768;
+
+    return Array.from({ length: ORB_COUNT }, (_, i) => ({
+      background:
+        i % 3 === 0
+          ? "var(--gradient-tertiary)"
+          : i % 3 === 1
+            ? "var(--gradient-quaternary)"
+            : "radial-gradient(circle, rgba(0,212,170,0.3), transparent)",
+      size: Math.random() * 300 + 100,
+      initialX: Math.random() * width,
+      initialY: Math.random() * height,
+      targetX: Math.random() * width,
+      targetY: Math.random() * height,
+      duration: Math.random() * 20 + 20,
+    }));
+  }, []);
+
   if (!mounted) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600" />
+      <div className="fixed inset-0 bg-[#0f0f0f]" />
     );
   }
 
@@ -24,28 +57,25 @@ export function AnimatedBackground() {
 
       {/* Floating orbs */}
       <div className="absolute inset-0">
-        {[...Array(6)].map((_, i) => (
+        {orbConfigs.map((orb, i) => (
           <motion.div
             key={i}
-            className="absolute rounded-full opacity-20 mix-blend-multiply filter blur-xl"
+            className="absolute rounded-full opacity-10 mix-blend-screen filter blur-xl"
             style={{
-              background:
-                i % 2 === 0
-                  ? "var(--gradient-tertiary)"
-                  : "var(--gradient-quaternary)",
-              width: `${Math.random() * 300 + 100}px`,
-              height: `${Math.random() * 300 + 100}px`,
+              background: orb.background,
+              width: `${orb.size}px`,
+              height: `${orb.size}px`,
             }}
             initial={{
-              x: Math.random() * window.innerWidth,
-              y: Math.random() * window.innerHeight,
+              x: orb.initialX,
+              y: orb.initialY,
             }}
             animate={{
-              x: Math.random() * window.innerWidth,
-              y: Math.random() * window.innerHeight,
+              x: orb.targetX,
+              y: orb.targetY,
             }}
             transition={{
-              duration: Math.random() * 20 + 20,
+              duration: orb.duration,
               repeat: Infinity,
               repeatType: "reverse",
               ease: "linear",
@@ -88,66 +118,4 @@ export function AnimatedBackground() {
   );
 }
 
-export function BackgroundOrbs() {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {/* Large background orbs */}
-      {[...Array(3)].map((_, i) => (
-        <motion.div
-          key={`large-${i}`}
-          className="absolute rounded-full opacity-30 mix-blend-multiply filter blur-3xl"
-          style={{
-            background: [
-              "var(--gradient-primary)",
-              "var(--gradient-secondary)",
-              "var(--gradient-tertiary)",
-            ][i],
-            width: "800px",
-            height: "800px",
-          }}
-          initial={{
-            x: -200,
-            y: -200,
-          }}
-          animate={{
-            x: ["-200px", "100vw", "-200px"],
-            y: ["-200px", "100vh", "-200px"],
-            scale: [1, 1.2, 1],
-          }}
-          transition={{
-            duration: 30 + i * 10,
-            repeat: Infinity,
-            ease: "linear",
-          }}
-        />
-      ))}
-
-      {/* Medium floating orbs */}
-      {[...Array(4)].map((_, i) => (
-        <motion.div
-          key={`medium-${i}`}
-          className="absolute rounded-full opacity-20 mix-blend-screen filter blur-2xl"
-          style={{
-            background:
-              i % 2 === 0
-                ? "var(--gradient-quaternary)"
-                : "var(--gradient-secondary)",
-            width: "300px",
-            height: "300px",
-          }}
-          animate={{
-            x: ["0vw", "100vw", "0vw"],
-            y: ["0vh", "100vh", "0vh"],
-            scale: [0.8, 1.3, 0.8],
-          }}
-          transition={{
-            duration: 25 + i * 5,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-      ))}
-    </div>
-  );
-}
 

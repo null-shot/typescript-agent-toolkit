@@ -1,0 +1,21 @@
+# AI Provider Configuration
+# Set AI_PROVIDER in wrangler.jsonc (default: workers-ai)
+# Then add the corresponding API key here.
+
+# Anthropic (Claude)
+# ANTHROPIC_API_KEY=sk-ant-...
+
+# OpenAI (GPT-4o, etc.)
+# OPEN_AI_API_KEY=sk-...
+
+# DeepSeek
+# DEEPSEEK_API_KEY=sk-...
+
+# Google (Gemini)
+# GOOGLE_API_KEY=...
+
+# xAI (Grok)
+# GROK_API_KEY=...
+
+# Generic key (used by DependentAgent as fallback)
+# AI_PROVIDER_API_KEY=...

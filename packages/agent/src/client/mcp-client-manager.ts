@@ -26,6 +26,7 @@ function convertMCPSchemaToJSONSchema7(mcpSchema: Tool['inputSchema']): JSONSche
 	// MCP inputSchema should be compatible with JSONSchema7, but TypeScript can't verify this
 	// We perform basic validation and return a properly typed schema
 	if (!mcpSchema || typeof mcpSchema !== 'object') {
+		console.log('⚠️ MCP schema is empty or invalid, using default empty object schema');
 		// Fallback to empty object schema if invalid
 		return {
 			type: 'object',
@@ -34,9 +35,18 @@ function convertMCPSchemaToJSONSchema7(mcpSchema: Tool['inputSchema']): JSONSche
 		};
 	}
 
+	// Ensure the schema has a type - required by AI SDK providers
+	const schema = mcpSchema as JSONSchema7;
+	if (!schema.type) {
+		console.log('⚠️ MCP schema missing type, adding "object" type');
+		return {
+			type: 'object',
+			...schema,
+		};
+	}
+
 	// MCP schemas are JSON Schema objects, so this should be safe
-	// We're being explicit about the conversion rather than using 'as any'
-	return mcpSchema as JSONSchema7;
+	return schema;
 }
 
 /**
@@ -189,27 +199,112 @@ export class NullShotMCPClientManager extends MCPClientManager {
 
 			// Convert each tool to AI SDK v5 format
 			for (const tool of toolsToProcess) {
-				const toolKey = `${connectionInfo.name}-${tool.name}`;
-				aiTools[toolKey] = {
-					description: tool.description,
-					// AI SDK v5 Tool interface expects FlexibleSchema, convert MCP schema to JSONSchema7 then to FlexibleSchema
-					inputSchema: jsonSchema(convertMCPSchemaToJSONSchema7(tool.inputSchema)),
-					execute: async (params: any) => {
-						if (connectionInfo.type === 'service-binding' && connectionInfo.client) {
-							return await connectionInfo.client.callTool({
-								name: tool.name,
-								arguments: params,
-							});
-						} else {
-							// For URL connections, delegate to parent callTool
-							return await super.callTool({
-								serverId: connectionInfo.id,
-								name: tool.name,
-								arguments: params,
-							});
-						}
-					},
-				};
+				// Use original tool name without prefix to match what the agent expects
+				// Prefix is only needed if there are duplicate tool names across servers
+				const toolKey = tool.name;
+				
+				// Check for duplicate tool names and add prefix only if needed
+				if (aiTools[toolKey]) {
+					// Tool name conflict - use prefixed name
+					const prefixedKey = `${connectionInfo.name}-${tool.name}`;
+					console.warn(`⚠️ Tool name conflict: "${tool.name}" already exists. Using prefixed name: "${prefixedKey}"`);
+					// Don't overwrite existing tool, use prefixed version instead
+					const schema = convertMCPSchemaToJSONSchema7(tool.inputSchema);
+					aiTools[prefixedKey] = {
+						description: `${tool.description || `Tool: ${tool.name}`} (from ${connectionInfo.name})`,
+						inputSchema: jsonSchema(schema),
+						execute: async (params: any) => {
+							console.log(`🔧 Executing tool "${prefixedKey}" (${tool.name}) with params:`, JSON.stringify(params));
+							try {
+								if (connectionInfo.type === 'service-binding' && connectionInfo.client) {
+									console.log(`📞 Calling MCP tool "${tool.name}" via service binding`);
+									const result = await connectionInfo.client.callTool({
+										name: tool.name,
+										arguments: params,
+									});
+									console.log(`✅ Tool "${tool.name}" returned result:`, JSON.stringify(result));
+									if (result.content && Array.isArray(result.content)) {
+										const textResult = result.content.map((c: any) => c.text || JSON.stringify(c)).join('\n');
+										console.log(`📝 Tool "${tool.name}" text result:`, textResult);
+										return textResult;
+									}
+									const jsonResult = JSON.stringify(result);
+									console.log(`📝 Tool "${tool.name}" JSON result:`, jsonResult);
+									return jsonResult;
+								} else {
+									console.log(`📞 Calling MCP tool "${tool.name}" via URL`);
+									const result = await super.callTool({
+										serverId: connectionInfo.id,
+										name: tool.name,
+										arguments: params,
+									});
+									console.log(`✅ Tool "${tool.name}" returned result:`, JSON.stringify(result));
+									if (result.content && Array.isArray(result.content)) {
+										const textResult = result.content.map((c: any) => c.text || JSON.stringify(c)).join('\n');
+										console.log(`📝 Tool "${tool.name}" text result:`, textResult);
+										return textResult;
+									}
+									const jsonResult = JSON.stringify(result);
+									console.log(`📝 Tool "${tool.name}" JSON result:`, jsonResult);
+									return jsonResult;
+								}
+							} catch (error) {
+								console.error(`❌ Error executing tool "${tool.name}":`, error);
+								throw error;
+							}
+						},
+					};
+				} else {
+					// No conflict - use original tool name
+					const schema = convertMCPSchemaToJSONSchema7(tool.inputSchema);
+					aiTools[toolKey] = {
+						description: tool.description || `Tool: ${tool.name}`,
+						// AI SDK v5 Tool interface expects inputSchema wrapped with jsonSchema()
+						inputSchema: jsonSchema(schema),
+						execute: async (params: any) => {
+							console.log(`🔧 Executing tool "${tool.name}" with params:`, JSON.stringify(params));
+							try {
+								if (connectionInfo.type === 'service-binding' && connectionInfo.client) {
+									console.log(`📞 Calling MCP tool "${tool.name}" via service binding`);
+									const result = await connectionInfo.client.callTool({
+										name: tool.name,
+										arguments: params,
+									});
+									console.log(`✅ Tool "${tool.name}" returned result:`, JSON.stringify(result));
+									// Return text content from MCP result
+									if (result.content && Array.isArray(result.content)) {
+										const textResult = result.content.map((c: any) => c.text || JSON.stringify(c)).join('\n');
+										console.log(`📝 Tool "${tool.name}" text result:`, textResult);
+										return textResult;
+									}
+									const jsonResult = JSON.stringify(result);
+									console.log(`📝 Tool "${tool.name}" JSON result:`, jsonResult);
+									return jsonResult;
+								} else {
+									// For URL connections, delegate to parent callTool
+									console.log(`📞 Calling MCP tool "${tool.name}" via URL`);
+									const result = await super.callTool({
+										serverId: connectionInfo.id,
+										name: tool.name,
+										arguments: params,
+									});
+									console.log(`✅ Tool "${tool.name}" returned result:`, JSON.stringify(result));
+									if (result.content && Array.isArray(result.content)) {
+										const textResult = result.content.map((c: any) => c.text || JSON.stringify(c)).join('\n');
+										console.log(`📝 Tool "${tool.name}" text result:`, textResult);
+										return textResult;
+									}
+									const jsonResult = JSON.stringify(result);
+									console.log(`📝 Tool "${tool.name}" JSON result:`, jsonResult);
+									return jsonResult;
+								}
+							} catch (error) {
+								console.error(`❌ Error executing tool "${tool.name}":`, error);
+								throw error;
+							}
+						},
+					};
+				}
 			}
 		}
 
@@ -242,6 +337,7 @@ export class NullShotMCPClientManager extends MCPClientManager {
 		type: 'url' | 'service-binding';
 		connectionState: string;
 		tools: string[];
+		toolDetails: Array<{ name: string; description?: string; params: string[] }>;
 	}> {
 		return Array.from(this.enhancedConnections.values()).map((connectionInfo) => ({
 			id: connectionInfo.id,
@@ -249,6 +345,11 @@ export class NullShotMCPClientManager extends MCPClientManager {
 			type: connectionInfo.type,
 			connectionState: connectionInfo.connectionState,
 			tools: connectionInfo.tools.map((tool) => tool.name),
+			toolDetails: connectionInfo.tools.map((tool) => ({
+				name: tool.name,
+				description: tool.description,
+				params: Object.keys((tool.inputSchema as any)?.properties || {}),
+			})),
 		}));
 	}
 

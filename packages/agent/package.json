@@ -17,6 +17,10 @@
 		"./aisdk": {
 			"types": "./dist/aisdk/index.d.ts",
 			"import": "./dist/aisdk/index.js"
+		},
+		"./playground": {
+			"types": "./dist/playground/index.d.ts",
+			"import": "./dist/playground/index.js"
 		}
 	},
 	"bin": {
@@ -30,7 +34,8 @@
 		"build": "tsc",
 		"preinstall": "mkdir -p dist",
 		"prepare": "npm run build",
-		"test": "echo No Tests",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"lint": "echo 'No ESLint configured for this package'",
 		"lint:fix": "echo 'No ESLint configured for this package'",
 		"type-check": "tsc --noEmit",
@@ -47,7 +52,7 @@
 	"dependencies": {
 		"agents": "^0.0.113",
 		"ai": "catalog:",
-		"hono": "^4.7.7",
+		"hono": "^4.11.9",
 		"zod": "catalog:"
 	},
 	"files": [

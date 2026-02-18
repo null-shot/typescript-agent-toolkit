@@ -99,7 +99,7 @@ describe("MigrationManager", () => {
 
       expect(mockExec).toHaveBeenCalledTimes(3);
       expect(mockExec).toHaveBeenCalledWith(
-        "wrangler d1 migrations apply DB1 --local --config /path/to/dep1/wrangler.jsonc",
+        "npx wrangler d1 migrations apply DB1 --local --config /path/to/dep1/wrangler.jsonc",
         { cwd: process.cwd(), env: process.env },
         expect.any(Function)
       );

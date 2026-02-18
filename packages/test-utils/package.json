@@ -72,13 +72,13 @@
     "postversion": "echo 'Version updated to' $npm_package_version"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.17.2"
+    "@modelcontextprotocol/sdk": "^1.26.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
     "@cloudflare/workers-types": "catalog:",
     "@semantic-release/git": "^10.0.1",
-    "semantic-release": "^24.2.3",
+    "semantic-release": "^24.2.9",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

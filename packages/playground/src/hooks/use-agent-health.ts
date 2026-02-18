@@ -27,6 +27,7 @@ export function useAgentHealth(agent: Agent, interval: number = 30000) {
     agentUrlRef.current = agent.url;
     agentIdRef.current = agent.id;
     agentRef.current = agent;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally narrow deps to avoid re-runs on health updates
   }, [agent.url, agent.id]);
 
   /**

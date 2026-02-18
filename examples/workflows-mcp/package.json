@@ -1,0 +1,23 @@
+{
+	"name": "workflows-mcp",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev --local --port 8810",
+		"dev:remote": "wrangler dev --remote --port 8810",
+		"deploy": "wrangler deploy",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "catalog:",
+		"@nullshot/mcp": "workspace:*",
+		"hono": "^4.11.9",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "catalog:",
+		"typescript": "catalog:",
+		"wrangler": "catalog:"
+	}
+}

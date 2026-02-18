@@ -1,0 +1,32 @@
+{
+	"name": "vectorize-mcp",
+	"type": "mcp",
+	"description": "Vector search & RAG (Vectorize + Workers AI)",
+	"exports": {
+		"className": "VectorizeMcpServer",
+		"binding": "VECTORIZE_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod"
+	],
+	"routes": {
+		"pattern": "/mcp/vectorize/*",
+		"method": "all"
+	},
+	"tools": [
+		"add_document",
+		"search_similar",
+		"get_document",
+		"update_document",
+		"delete_document",
+		"list_documents",
+		"find_related",
+		"batch_add_documents",
+		"get_index_stats"
+	],
+	"tier": 3,
+	"disabled": true,
+	"disabledReason": "Requires Vectorize index + Workers AI"
+}

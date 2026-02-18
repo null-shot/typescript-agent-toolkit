@@ -1,0 +1,58 @@
+{
+  "name": "telegram-bot-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./handlers/message-handler": "./src/handlers/message-handler.ts",
+    "./handlers/agent-handler": "./src/handlers/agent-handler.ts",
+    "./handlers/channel-handler": "./src/handlers/channel-handler.ts",
+    "./handlers/schedule-handler": "./src/handlers/schedule-handler.ts",
+    "./handlers/moderation-handler": "./src/handlers/moderation-handler.ts",
+    "./handlers/proactive-handler": "./src/handlers/proactive-handler.ts",
+    "./handlers/setup-handler": "./src/handlers/setup-handler.ts",
+    "./handlers/task-handler": "./src/handlers/task-handler.ts",
+    "./utils/kanban-storage": "./src/utils/kanban-storage.ts",
+    "./utils/bot-chats-storage": "./src/utils/bot-chats-storage.ts",
+    "./utils/telegram-logger": "./src/utils/telegram-logger.ts",
+    "./utils/session": "./src/utils/session.ts",
+    "./utils/owner": "./src/utils/owner.ts",
+    "./utils/helpers": "./src/utils/helpers.ts",
+    "./utils/moderation-storage": "./src/utils/moderation-storage.ts",
+    "./utils/spam-detector": "./src/utils/spam-detector.ts",
+    "./utils/proactive-responder": "./src/utils/proactive-responder.ts",
+    "./utils/proactive-storage": "./src/utils/proactive-storage.ts",
+    "./utils/agent-client": "./src/utils/agent-client.ts",
+    "./utils/message-history": "./src/utils/message-history.ts",
+    "./handlers/core-handlers": "./src/handlers/core-handlers.ts",
+    "./utils/cron-processor": "./src/utils/cron-processor.ts",
+    "./dashboard/setup-dashboard": "./src/dashboard/setup-dashboard.ts",
+    "./dashboard/telegram-routes": "./src/dashboard/telegram-routes.ts",
+    "./types/env": "./src/types/env.ts"
+  },
+  "scripts": {
+    "dev": "wrangler dev --local --port 8789",
+    "dev:polling": "tsx --env-file=.dev.vars src/polling-runner.ts",
+    "dev:remote": "wrangler dev --remote --port 8789",
+    "deploy": "wrangler deploy",
+    "start": "wrangler dev --local --port 8789",
+    "start:polling": "tsx --env-file=.dev.vars src/polling-runner.ts",
+    "test": "vitest run",
+    "cf-typegen": "wrangler types",
+    "build": "wrangler build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "grammy": "^1.24.0",
+    "hono": "^4.7.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/workers-types": "^4.20250115.0",
+    "@types/node": "catalog:",
+    "tsx": "^4.19.2",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

@@ -1,0 +1,22 @@
+{
+	"name": "secret-mcp",
+	"type": "mcp",
+	"description": "Secret guessing game demo",
+	"exports": {
+		"className": "SecretMcpServer",
+		"binding": "SECRET_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod"
+	],
+	"routes": {
+		"pattern": "/mcp/secret/*",
+		"method": "all"
+	},
+	"tools": [
+		"guess_number"
+	],
+	"tier": 1
+}

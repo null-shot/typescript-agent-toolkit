@@ -10,6 +10,15 @@ export { InputManager } from "./template/input-manager.js";
 export { DependencyAnalyzer } from "./dependency/dependency-analyzer.js";
 export { MigrationManager } from "./dependency/migration-manager.js";
 
+// Bundle manager for single-worker generation
+export { 
+  createBundle, 
+  discoverComponents,
+  generateBundledIndexTs,
+  generateWranglerConfig,
+  generatePackageJson,
+} from "./bundle/bundle-manager.js";
+
 // Export types
 export type {
   MCPConfig,
@@ -24,5 +33,11 @@ export type {
   DependencyAnalysisResult,
   MigrationConfig
 } from "./types/index.js";
+
+// Export bundle types
+export type { 
+  ComponentConfig, 
+  BundleConfig 
+} from "./bundle/bundle-manager.js";
 
 // Note: CLI program is not exported as it's designed for command-line use only

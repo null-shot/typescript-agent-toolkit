@@ -1,0 +1,24 @@
+{
+	"name": "simple-prompt-agent",
+	"type": "agent",
+	"description": "Simple conversational AI agent with multi-provider support",
+	"exports": {
+		"className": "SimplePromptAgent",
+		"binding": "AGENT"
+	},
+	"dependencies": [
+		"@ai-sdk/openai",
+		"@ai-sdk/anthropic",
+		"@ai-sdk/deepseek",
+		"@ai-sdk/xai",
+		"@nullshot/agent"
+	],
+	"env": {
+		"required": ["AI_PROVIDER"],
+		"secrets": ["OPEN_AI_API_KEY", "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY", "GROK_API_KEY"]
+	},
+	"routes": {
+		"pattern": "/agent/chat/:sessionId?",
+		"method": "all"
+	}
+}

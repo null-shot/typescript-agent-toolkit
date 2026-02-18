@@ -20,15 +20,13 @@ import { Badge } from "@/components/ui/badge";
 import {
   validateAgentUrl,
   testAgentConnection,
-  type CustomAgent,
 } from "@/lib/agent-storage";
 import { useAgentManagement } from "@/lib/agent-context";
-import { type Agent } from "@/lib/config";
 
 export interface AddAgentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAgentAdded: (agent: CustomAgent) => void;
+  onAgentAdded: () => void;
 }
 
 export function AddAgentModal({
@@ -111,10 +109,7 @@ export function AddAgentModal({
     try {
       const result = await addAgent(name.trim(), url.trim());
       if (result.success) {
-        // Find the newly added agent (it will be in the context)
-        // For now, we'll just notify that an agent was added
-        // The actual agent object will be available through the context
-        onAgentAdded({} as Agent);
+        onAgentAdded();
         handleClose();
       } else {
         setError(result.error || "Failed to add agent");
@@ -130,15 +125,15 @@ export function AddAgentModal({
         {/* Custom solid overlay */}
         <DialogOverlay className="bg-black/90 backdrop-blur-sm" />
         <DialogContent
-          className="sm:max-w-md bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 shadow-2xl"
+          className="sm:max-w-md bg-[#1e1e1e] border border-[rgba(255,255,255,0.08)] shadow-2xl text-white"
           showCloseButton={true}
         >
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+            <DialogTitle className="flex items-center gap-2 text-white">
               <Plus className="h-5 w-5" />
               Add New Agent
             </DialogTitle>
-            <DialogDescription className="text-gray-600 dark:text-gray-300">
+            <DialogDescription className="text-[#a0a0a0]">
               Add a custom agent by providing a name and URL. The URL should
               point to a running agent instance.
             </DialogDescription>
@@ -148,7 +143,7 @@ export function AddAgentModal({
             <div className="space-y-2">
               <Label
                 htmlFor="agent-name"
-                className="text-gray-900 dark:text-white font-medium"
+                className="text-white font-medium"
               >
                 Agent Name
               </Label>
@@ -157,14 +152,14 @@ export function AddAgentModal({
                 placeholder="My Custom Agent"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                className="w-full bg-[#252525] border-[rgba(255,255,255,0.1)] text-white placeholder:text-[#666666]"
               />
             </div>
 
             <div className="space-y-2">
               <Label
                 htmlFor="agent-url"
-                className="text-gray-900 dark:text-white font-medium"
+                className="text-white font-medium"
               >
                 Agent URL
               </Label>
@@ -178,14 +173,14 @@ export function AddAgentModal({
                     setConnectionStatus({ tested: false, online: false });
                     setError(null);
                   }}
-                  className="flex-1 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                  className="flex-1 bg-[#252525] border-[rgba(255,255,255,0.1)] text-white placeholder:text-[#666666]"
                 />
                 <Button
                   type="button"
                   variant="outline"
                   onClick={testConnection}
                   disabled={!url.trim() || isTestingConnection}
-                  className="shrink-0 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="shrink-0 bg-[#252525] border-[rgba(255,255,255,0.1)] text-[#d0d0d0] hover:bg-[#303030]"
                 >
                   {isTestingConnection ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -200,20 +195,20 @@ export function AddAgentModal({
                 <div className="flex items-center gap-2 text-sm">
                   {connectionStatus.online ? (
                     <>
-                      <Check className="h-4 w-4 text-green-500" />
+                      <Check className="h-4 w-4 text-[#00d96f]" />
                       <Badge
                         variant="outline"
-                        className="text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20"
+                        className="text-[#00d96f] border-[rgba(0,217,111,0.3)] bg-[rgba(0,217,111,0.1)]"
                       >
                         Connection successful
                       </Badge>
                     </>
                   ) : (
                     <>
-                      <AlertCircle className="h-4 w-4 text-red-500" />
+                      <AlertCircle className="h-4 w-4 text-[#ff6450]" />
                       <Badge
                         variant="outline"
-                        className="text-red-600 border-red-200 bg-red-50 dark:bg-red-900/20"
+                        className="text-[#ff6450] border-[rgba(255,100,80,0.3)] bg-[rgba(255,100,80,0.1)]"
                       >
                         Connection failed
                       </Badge>
@@ -224,8 +219,8 @@ export function AddAgentModal({
             </div>
 
             {error && (
-              <div className="p-3 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-600">
-                <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-300">
+              <div className="p-3 rounded-md bg-[rgba(255,100,80,0.1)] border border-[rgba(255,100,80,0.3)]">
+                <div className="flex items-center gap-2 text-sm text-[#ff6450]">
                   <AlertCircle className="h-4 w-4" />
                   {error}
                 </div>
@@ -238,14 +233,14 @@ export function AddAgentModal({
                 variant="outline"
                 onClick={handleClose}
                 disabled={isLoading}
-                className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="bg-[#252525] border-[rgba(255,255,255,0.1)] text-[#d0d0d0] hover:bg-[#303030]"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={isLoading || !name.trim() || !url.trim()}
-                className="min-w-[80px] bg-blue-600 hover:bg-blue-700 text-white border-0"
+                className="min-w-[80px] bg-[#00d4aa] hover:bg-[#14b8a6] text-black border-0 font-semibold"
               >
                 {isLoading ? (
                   <>

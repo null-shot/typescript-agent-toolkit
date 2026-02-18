@@ -10,22 +10,22 @@
 		"test": "vitest run"
 	},
 	"devDependencies": {
-		"typescript": "catalog:",
-		"wrangler": "catalog:",
-		"vitest": "catalog:",
 		"@cloudflare/vitest-pool-workers": "catalog:",
 		"@nullshot/test-utils": "workspace:*",
-		"concurrently": "^9.1.2"
+		"concurrently": "^9.2.1",
+		"typescript": "catalog:",
+		"vitest": "catalog:",
+		"wrangler": "catalog:"
 	},
 	"dependencies": {
-		"@nullshot/agent": "workspace:*",
 		"@ai-sdk/anthropic": "catalog:",
-		"@ai-sdk/openai": "catalog:",
-		"@ai-sdk/google": "catalog:",
 		"@ai-sdk/deepseek": "catalog:",
+		"@ai-sdk/google": "catalog:",
+		"@ai-sdk/openai": "catalog:",
 		"@ai-sdk/xai": "catalog:",
+		"@nullshot/agent": "workspace:*",
 		"ai": "catalog:",
-		"hono": "^4.7.7",
+		"hono": "^4.11.9",
 		"workers-ai-provider": "catalog:"
 	}
 }

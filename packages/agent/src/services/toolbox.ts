@@ -61,8 +61,15 @@ export class ToolboxService implements ExternalService, MiddlewareService {
 
 		// Iterate through all properties of the env object
 		for (const [key, value] of Object.entries(this.env)) {
-			// Check if the value is a Fetcher (has a fetch method)
-			if (value && typeof value === 'object' && 'fetch' in value && typeof value.fetch === 'function') {
+			// Check if the value is a Fetcher (has a fetch method but NOT a DurableObjectNamespace)
+			// DurableObjectNamespace has idFromName, get, newUniqueId - we handle those separately
+			if (
+				value &&
+				typeof value === 'object' &&
+				'fetch' in value &&
+				typeof value.fetch === 'function' &&
+				!('idFromName' in value) // Exclude DurableObjectNamespace
+			) {
 				fetcherBindings[key] = value as Fetcher;
 			}
 		}
@@ -71,6 +78,112 @@ export class ToolboxService implements ExternalService, MiddlewareService {
 			`🔍 Found ${Object.keys(fetcherBindings).length} Fetcher service bindings to test: ${Object.keys(fetcherBindings).join(', ')}`,
 		);
 		return fetcherBindings;
+	}
+
+	/**
+	 * Find all Durable Object Namespace bindings from the environment
+	 * These could be co-located MCP servers in single-worker architecture
+	 */
+	private findDurableObjectBindings(): Record<string, DurableObjectNamespace> {
+		const doBindings: Record<string, DurableObjectNamespace> = {};
+
+		// Iterate through all properties of the env object
+		for (const [key, value] of Object.entries(this.env)) {
+			// DurableObjectNamespace has idFromName, get, newUniqueId methods
+			if (
+				value &&
+				typeof value === 'object' &&
+				'idFromName' in value &&
+				'get' in value &&
+				'newUniqueId' in value &&
+				typeof (value as any).idFromName === 'function' &&
+				typeof (value as any).get === 'function'
+			) {
+				doBindings[key] = value as DurableObjectNamespace;
+			}
+		}
+
+		console.log(
+			`🔍 Found ${Object.keys(doBindings).length} Durable Object bindings to test: ${Object.keys(doBindings).join(', ')}`,
+		);
+		return doBindings;
+	}
+
+	/**
+	 * Test if a Durable Object is an MCP service by trying the /sse endpoint
+	 * Uses a singleton ID pattern ('mcp-singleton') for MCP servers
+	 * 
+	 * IMPORTANT: This test creates a temporary SSE connection that is immediately
+	 * cancelled after checking response headers. The actual MCP connection will
+	 * use a fresh sessionId to avoid zombie transport issues.
+	 */
+	private async testDOMCPBinding(bindingName: string, doNamespace: DurableObjectNamespace): Promise<{ isMCP: boolean; stub?: DurableObjectStub }> {
+		try {
+			// Use a well-known singleton ID for MCP servers
+			const id = doNamespace.idFromName('mcp-singleton');
+			const stub = doNamespace.get(id);
+
+			// Generate a throwaway session ID just for the probe
+			const probeSessionId = `mcp-probe-${crypto.randomUUID()}`;
+
+			// Test the SSE endpoint with proper MCP headers and required sessionId parameter
+			const response = await stub.fetch(
+				new Request(`https://do-internal/sse?sessionId=${probeSessionId}`, {
+					method: 'GET',
+					headers: {
+						Accept: 'text/event-stream',
+						'Cache-Control': 'no-cache',
+						Connection: 'keep-alive',
+					},
+				}),
+			);
+
+			// Check response characteristics
+			const contentType = response.headers.get('content-type');
+			const cacheControl = response.headers.get('cache-control');
+			const connection = response.headers.get('connection');
+
+			const isSSE = contentType?.includes('text/event-stream') || false;
+			const hasProperCaching = cacheControl?.includes('no-cache') || false;
+			const hasKeepAlive = connection?.includes('keep-alive') || false;
+
+			// CRITICAL: Cancel the probe response body to avoid zombie SSE transport
+			// Without this, Transport A stays open with an unconsumed WritableStream
+			try {
+				if (response.body) {
+					await response.body.cancel();
+				}
+			} catch {
+				// Ignore cancel errors - the important thing is we don't leave it hanging
+			}
+
+			// Log detailed test results
+			console.log(
+				`🔍 DO ${bindingName} test results: status=${response.status}, SSE=${isSSE}, cache=${hasProperCaching}, keepalive=${hasKeepAlive}`,
+			);
+
+			// Consider it an MCP service if it has all the characteristics of an SSE MCP endpoint
+			const isMCPService = response.status === 200 && isSSE && (hasProperCaching || hasKeepAlive);
+
+			return { isMCP: isMCPService, stub: isMCPService ? stub : undefined };
+		} catch (error) {
+			console.log(`❌ DO ${bindingName} MCP test failed:`, error instanceof Error ? error.message : 'Unknown error');
+			return { isMCP: false };
+		}
+	}
+
+	/**
+	 * Create a Fetcher-like wrapper around a DurableObjectStub
+	 * This allows us to use the same MCP client code for both service bindings and DOs
+	 */
+	private createDOFetcherWrapper(stub: DurableObjectStub): Fetcher {
+		return {
+			fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+				// Convert input to Request if needed
+				const request = input instanceof Request ? input : new Request(input, init);
+				return stub.fetch(request);
+			},
+		} as Fetcher;
 	}
 
 	/**
@@ -143,16 +256,23 @@ export class ToolboxService implements ExternalService, MiddlewareService {
 	 * Initialize the tools service by connecting to configured MCP servers
 	 */
 	async initialize(): Promise<void> {
+		console.log(`🚀 ToolboxService.initialize() called`)
+		console.log(`🔍 ToolboxService: env keys:`, Object.keys(this.env).join(', '))
+		
 		// Get the MCP server configurations from mcp.json
 		const mcpServers = this.parseServerConfig();
+		console.log(`📋 ToolboxService: Parsed ${Object.keys(mcpServers).length} MCP server configs from mcp.json`)
 
 		// Find all Fetcher service bindings for testing
 		const fetcherBindings = this.findFetcherBindings();
 
+		// Find all Durable Object bindings for testing (single-worker architecture)
+		const doBindings = this.findDurableObjectBindings();
+
 		console.log(
-			`🔧 Toolbox Service: Initializing with ${Object.keys(mcpServers).length} configured servers and ${
+			`🔧 Toolbox Service: Initializing with ${Object.keys(mcpServers).length} configured servers, ${
 				Object.keys(fetcherBindings).length
-			} Fetcher bindings to test`,
+			} Fetcher bindings, and ${Object.keys(doBindings).length} DO bindings to test`,
 		);
 
 		// Track initialization results
@@ -184,7 +304,7 @@ export class ToolboxService implements ExternalService, MiddlewareService {
 			}
 		}
 
-		// 2. Auto-discover MCP services from all service bindings
+		// 2. Auto-discover MCP services from all service bindings (multi-worker architecture)
 		for (const [bindingName, fetcher] of Object.entries(fetcherBindings)) {
 			try {
 				console.log(`🧪 Testing service binding "${bindingName}" for MCP compatibility...`);
@@ -206,11 +326,54 @@ export class ToolboxService implements ExternalService, MiddlewareService {
 			}
 		}
 
+		// 3. Auto-discover MCP services from Durable Object bindings (single-worker architecture)
+		for (const [bindingName, doNamespace] of Object.entries(doBindings)) {
+			try {
+				// Skip AGENT binding - that's the agent itself, not an MCP server
+				if (bindingName === 'AGENT' || bindingName.endsWith('_AGENT')) {
+					console.log(`⏭️  Skipping "${bindingName}" - appears to be an agent, not MCP`);
+					initResults.skipped++;
+					continue;
+				}
+
+				console.log(`🧪 Testing Durable Object "${bindingName}" for MCP compatibility...`);
+				const { isMCP, stub } = await this.testDOMCPBinding(bindingName, doNamespace);
+
+				if (isMCP && stub) {
+					console.log(`🎉 Auto-discovered DO MCP service: "${bindingName}"`);
+					// Wrap the DO stub as a Fetcher for compatibility with existing MCP client
+					const fetcherWrapper = this.createDOFetcherWrapper(stub);
+					// Create a FRESH sessionId for the real connection (separate from probe)
+					const connectionSessionId = `mcp-${crypto.randomUUID()}`;
+					const endpointWithSession = `/sse?sessionId=${connectionSessionId}`;
+					await this.mcpManager.connectServiceBinding(fetcherWrapper, bindingName, endpointWithSession);
+					console.log(`✅ DO MCP service "${bindingName}" initialized successfully`);
+					initResults.successful++;
+				} else {
+					console.log(`⏭️  Durable Object "${bindingName}" is not an MCP service`);
+					initResults.skipped++;
+				}
+			} catch (error) {
+				console.error(`❌ Failed to test/initialize DO "${bindingName}":`, error);
+				initResults.failed++;
+			}
+		}
+
 		// Log initialization summary
 		this.logInitializationSummary(initResults, mcpServers);
 
 		// Log duplicate tool names
 		this.checkForDuplicateToolNames();
+		
+		// Final verification: check if tools are available
+		const finalTools = this.mcpManager.unstable_getAITools();
+		const toolCount = finalTools ? Object.keys(finalTools).length : 0;
+		console.log(`🎯 ToolboxService.initialize() completed: ${toolCount} tools available`)
+		if (toolCount > 0) {
+			console.log(`🛠️  ToolboxService tools: ${Object.keys(finalTools).join(', ')}`)
+		} else {
+			console.warn(`⚠️  ToolboxService.initialize() completed but NO TOOLS available!`)
+		}
 	}
 
 	/**
@@ -303,25 +466,44 @@ export class ToolboxService implements ExternalService, MiddlewareService {
 	 * Register tool-related routes with the Hono app
 	 */
 	registerRoutes<E extends AgentEnv>(app: Hono<{ Bindings: E }>): void {
-		// Register a route to get information about MCP servers
-		app.get('/mcp', async (c) => {
-			const mcpServers = this.mcpManager.getConnectionInfo();
-			return c.json({ mcpServers }, 200);
-		});
+		try {
+			// Register a route to get information about MCP servers
+			app.get('/mcp', async (c) => {
+				const mcpServers = this.mcpManager.getConnectionInfo();
+				return c.json({ mcpServers }, 200);
+			});
+		} catch (error) {
+			// Hono matcher may already be built if routes were registered after first request
+			// This is not critical - routes are optional for debugging
+			if (error instanceof Error && error.message.includes('matcher is already built')) {
+				console.warn(`⚠️ ToolboxService.registerRoutes: Matcher already built, skipping route registration`);
+				return;
+			}
+			throw error;
+		}
 
-		// Register a route to get all tools with details
-		app.get('/tools', async (c) => {
-			const allTools = this.mcpManager.listTools();
-			const toolsInfo = allTools.map((tool) => ({
-				name: tool.name,
-				description: tool.description || 'No description available',
-				mcpServer: tool.serverName || tool.serverId,
-				type: tool.connectionType || 'url',
-				parameters: tool.inputSchema?.properties || {},
-			}));
+		try {
+			// Register a route to get all tools with details
+			app.get('/tools', async (c) => {
+				const allTools = this.mcpManager.listTools();
+				const toolsInfo = allTools.map((tool) => ({
+					name: tool.name,
+					description: tool.description || 'No description available',
+					mcpServer: tool.serverName || tool.serverId,
+					type: tool.connectionType || 'url',
+					parameters: tool.inputSchema?.properties || {},
+				}));
 
-			return c.json({ tools: toolsInfo }, 200);
-		});
+				return c.json({ tools: toolsInfo }, 200);
+			});
+		} catch (error) {
+			// Hono matcher may already be built if routes were registered after first request
+			if (error instanceof Error && error.message.includes('matcher is already built')) {
+				console.warn(`⚠️ ToolboxService.registerRoutes: Matcher already built, skipping /tools route`);
+				return;
+			}
+			throw error;
+		}
 	}
 
 	/**
@@ -332,14 +514,40 @@ export class ToolboxService implements ExternalService, MiddlewareService {
 		await this.mcpManager.closeAllConnections();
 	}
 
-	transformStreamTextTools(tools?: ToolSet): ToolSet {
-		if (!tools) {
-			return this.mcpManager.unstable_getAITools();
+	transformStreamTextTools(tools?: ToolSet): ToolSet | undefined {
+		const mcpTools = this.mcpManager.unstable_getAITools();
+		
+		// Check if mcpTools is empty object - Anthropic SDK crashes on empty tools
+		const hasMcpTools = mcpTools && Object.keys(mcpTools).length > 0;
+		const hasInputTools = tools && Object.keys(tools).length > 0;
+
+		// Log tool availability for debugging
+		console.log(`🔧 ToolboxService.transformStreamTextTools: hasMcpTools=${hasMcpTools}, hasInputTools=${hasInputTools}`);
+		if (hasMcpTools) {
+			console.log(`🛠️  MCP tools available: ${Object.keys(mcpTools).join(', ')}`);
 		}
 
-		return {
+		if (!hasMcpTools && !hasInputTools) {
+			// Return undefined instead of empty object to avoid Anthropic SDK crash
+			console.log(`⚠️  No tools available (neither MCP nor input tools)`);
+			return undefined;
+		}
+
+		if (!hasInputTools) {
+			console.log(`✅ Returning MCP tools only: ${Object.keys(mcpTools).join(', ')}`);
+			return mcpTools;
+		}
+
+		if (!hasMcpTools) {
+			console.log(`✅ Returning input tools only: ${Object.keys(tools).join(', ')}`);
+			return tools;
+		}
+
+		const mergedTools = {
 			...tools,
-			...this.mcpManager.unstable_getAITools(),
+			...mcpTools,
 		};
+		console.log(`✅ Returning merged tools: ${Object.keys(mergedTools).join(', ')}`);
+		return mergedTools;
 	}
 }

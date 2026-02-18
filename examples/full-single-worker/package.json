@@ -1,0 +1,48 @@
+{
+  "name": "single-worker-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --port 8800",
+    "dev:remote": "wrangler dev --remote --port 8800",
+    "dev:staging": "wrangler dev --env staging --local --port 8800",
+    "dev:openai": "wrangler dev --env openai --local --port 8800",
+    "dev:deepseek": "wrangler dev --env deepseek --local --port 8800",
+    "deploy": "wrangler deploy",
+    "deploy:auto": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:prod": "wrangler deploy --env production",
+    "deploy:openai": "wrangler deploy --env openai",
+    "deploy:deepseek": "wrangler deploy --env deepseek",
+    "build": "wrangler build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "catalog:",
+    "@ai-sdk/deepseek": "catalog:",
+    "@ai-sdk/google": "catalog:",
+    "@ai-sdk/openai": "catalog:",
+    "@ai-sdk/xai": "catalog:",
+    "@modelcontextprotocol/sdk": "catalog:",
+    "@nullshot/agent": "workspace:*",
+    "@nullshot/mcp": "workspace:*",
+    "ai": "catalog:",
+    "workers-ai-provider": "catalog:",
+    "grammy": "^1.40.0",
+    "hono": "^4.11.9",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/workers-types": "catalog:",
+    "@nullshot/test-utils": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

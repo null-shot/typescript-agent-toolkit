@@ -1,0 +1,29 @@
+{
+	"name": "browser-mcp",
+	"type": "mcp",
+	"description": "Browser Rendering API (screenshots, scraping)",
+	"exports": {
+		"className": "BrowserMcpServer",
+		"binding": "BROWSER_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod",
+		"@cloudflare/puppeteer"
+	],
+	"routes": {
+		"pattern": "/mcp/browser/*",
+		"method": "all"
+	},
+	"tools": [
+		"navigate",
+		"screenshot",
+		"extract_text",
+		"extract_links",
+		"close_session"
+	],
+	"tier": 3,
+	"disabled": true,
+	"disabledReason": "Requires Browser Rendering API + R2 bucket"
+}

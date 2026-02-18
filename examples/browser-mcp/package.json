@@ -16,26 +16,23 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "@cloudflare/puppeteer": "^1.0.4",
+    "@cloudflare/puppeteer": "^1.0.6",
     "@modelcontextprotocol/sdk": "catalog:",
     "@nullshot/mcp": "workspace:*",
-    "hono": "^4.6.11",
+    "hono": "^4.11.9",
     "node-fetch": "^3.3.2",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.68",
-    "@cloudflare/workers-types": "^4.20241218.0",
+    "@cloudflare/vitest-pool-workers": "^0.8.71",
+    "@cloudflare/workers-types": "^4.20260212.0",
     "@nullshot/test-utils": "workspace:*",
-    "@types/node": "^22.10.2",
-    "concurrently": "^9.1.2",
+    "@types/node": "^22.19.11",
+    "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8",
-    "wrangler": "^4.33.1"
-  },
-  "optionalDependencies": {
-    "puppeteer": "^23.11.1"
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9",
+    "wrangler": "^4.65.0"
   },
   "keywords": [
     "mcp",

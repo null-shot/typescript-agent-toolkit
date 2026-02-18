@@ -2,70 +2,99 @@
 @source "../node_modules/streamdown/dist/index.js";
 
 :root {
-  /* Base Colors */
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ── Surface / Background ── */
+  --background: #0f0f0f;
+  --foreground: #ffffff;
+  --bg-base: #0f0f0f;
+  --bg-surface: #1a1a1a;
+  --bg-card: #1e1e1e;
+  --bg-input: #252525;
+  --bg-elevated: #303030;
+  --bg-sidebar: #0a0a0a;
 
-  /* Chat Colors */
-  --chat-background: #ffffff;
-  --chat-border: rgba(0, 0, 0, 0.1);
-  --chat-shadow: rgba(0, 0, 0, 0.1);
+  /* ── Text ── */
+  --text-primary: #ffffff;
+  --text-secondary: #d0d0d0;
+  --text-tertiary: #a0a0a0;
+  --text-muted: #666666;
 
-  /* Message Colors */
-  --message-user-bg: #6366f1;
-  --message-user-text: #ffffff;
-  --message-ai-bg: #f8fafc;
-  --message-ai-text: #1e293b;
-  --message-border: rgba(0, 0, 0, 0.1);
+  /* ── Chat Colors ── */
+  --chat-background: #0f0f0f;
+  --chat-border: rgba(255, 255, 255, 0.08);
+  --chat-shadow: rgba(0, 0, 0, 0.3);
 
-  /* Button Colors */
-  --button-primary: #6366f1;
-  --button-primary-hover: #4f46e5;
-  --button-secondary: #f8fafc;
-  --button-secondary-hover: #e2e8f0;
+  /* ── Message Colors ── */
+  --message-user-bg: #00d4aa;
+  --message-user-text: #000000;
+  --message-ai-bg: #1e1e1e;
+  --message-ai-text: #d0d0d0;
+  --message-border: rgba(255, 255, 255, 0.05);
 
-  /* Gradient Colors - Inspired by nullshot.ai */
-  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  --gradient-tertiary: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  --gradient-quaternary: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  /* ── Button Colors ── */
+  --button-primary: #00d4aa;
+  --button-primary-hover: #14b8a6;
+  --button-secondary: #252525;
+  --button-secondary-hover: #303030;
 
-  /* Animation Gradients */
+  /* ── Accent ── */
+  --accent: #00d4aa;
+  --accent-hover: #14b8a6;
+  --accent-subtle: rgba(0, 212, 170, 0.15);
+  --accent-muted: rgba(0, 212, 170, 0.1);
+  --accent-glow: rgba(0, 212, 170, 0.3);
+
+  /* ── Semantic ── */
+  --success: #00d96f;
+  --danger: #ff6450;
+  --warning: #ffc832;
+
+  /* ── Gradient Colors - Dark Teal/Cyan Theme ── */
+  --gradient-primary: linear-gradient(135deg, #0a2a2a 0%, #00d4aa 100%);
+  --gradient-secondary: linear-gradient(135deg, #1a1a2e 0%, #14b8a6 100%);
+  --gradient-tertiary: linear-gradient(135deg, #00d4aa 0%, #14b8a6 100%);
+  --gradient-quaternary: linear-gradient(135deg, #00d96f 0%, #00d4aa 100%);
+
+  /* ── Animation Gradients ── */
   --gradient-animated-1: linear-gradient(
     45deg,
-    #667eea,
-    #764ba2,
-    #f093fb,
-    #f5576c
+    #0a0a0a,
+    #0f1f1a,
+    #0a2a2a,
+    #1a1a1a
   );
   --gradient-animated-2: linear-gradient(
     45deg,
-    #4facfe,
-    #00f2fe,
-    #43e97b,
-    #38f9d7
+    #0f0f0f,
+    #0a1f1a,
+    #00d4aa20,
+    #14b8a620
   );
 
-  /* Border Radius */
+  /* ── Border ── */
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-light: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.1);
+
+  /* ── Border Radius ── */
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
   --radius-xl: 1.5rem;
 
-  /* Spacing */
+  /* ── Spacing ── */
   --spacing-xs: 0.5rem;
   --spacing-sm: 0.75rem;
   --spacing-md: 1rem;
   --spacing-lg: 1.5rem;
   --spacing-xl: 2rem;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
-  --shadow-lg: 0 8px 25px rgba(0, 0, 0, 0.15);
-  --shadow-chat: 0 20px 40px rgba(0, 0, 0, 0.1);
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 25px rgba(0, 0, 0, 0.4);
+  --shadow-chat: 0 20px 40px rgba(0, 0, 0, 0.4);
 
-  /* Typography */
+  /* ── Typography ── */
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
@@ -73,25 +102,10 @@
   --font-size-xl: 1.25rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-
-    /* Dark mode chat colors */
-    --chat-background: #0f172a;
-    --chat-border: rgba(255, 255, 255, 0.1);
-    --message-ai-bg: #1e293b;
-    --message-ai-text: #f1f5f9;
-    --button-secondary: #334155;
-    --button-secondary-hover: #475569;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow-x: hidden;
 }
 
@@ -122,8 +136,8 @@ body {
 
 /* Chat Component Styles */
 .chat-container {
-  background: var(--chat-background);
-  border: 1px solid var(--chat-border);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-chat);
 }
 
@@ -148,42 +162,29 @@ body {
 }
 
 .chat-messages::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.3);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.5);
+  background: rgba(255, 255, 255, 0.2);
 }
 
-/* Modal and Dialog Overrides - Ensure No Transparency */
+/* Modal and Dialog Overrides */
 [data-slot="dialog-overlay"] {
   background-color: rgba(0, 0, 0, 0.9) !important;
   backdrop-filter: blur(4px) !important;
 }
 
 [data-slot="dialog-content"] {
-  background: white !important;
-  border: 1px solid rgb(209, 213, 219) !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  [data-slot="dialog-content"] {
-    background: rgb(17, 24, 39) !important;
-    border: 1px solid rgb(75, 85, 99) !important;
-    color: white !important;
-  }
+  background: #1e1e1e !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
 }
 
 /* Ensure Select dropdowns are solid */
 [data-radix-select-content] {
-  background: white !important;
-  border: 1px solid rgb(209, 213, 219) !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  [data-radix-select-content] {
-    background: rgb(31, 41, 55) !important;
-    border: 1px solid rgb(75, 85, 99) !important;
-  }
+  background: #252525 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #d0d0d0 !important;
 }

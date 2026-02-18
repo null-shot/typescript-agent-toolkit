@@ -1,0 +1,55 @@
+# ═══════════════════════════════════════════════════
+# AI Provider Configuration
+# ═══════════════════════════════════════════════════
+# Pick ONE provider and set its API key
+
+# Anthropic (Claude) — recommended
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
+
+# OpenAI (GPT-4o)
+# AI_PROVIDER=openai
+# OPEN_AI_API_KEY=sk-your-key-here
+
+# Google (Gemini)
+# AI_PROVIDER=google
+# GOOGLE_API_KEY=your-key-here
+
+# DeepSeek (cheapest)
+# AI_PROVIDER=deepseek
+# DEEPSEEK_API_KEY=your-key-here
+
+# xAI (Grok)
+# AI_PROVIDER=grok
+# GROK_API_KEY=your-key-here
+
+# ═══════════════════════════════════════════════════
+# Telegram Bot (optional)
+# ═══════════════════════════════════════════════════
+# Get a token from @BotFather on Telegram
+TELEGRAM_BOT_TOKEN=
+# Secret for webhook verification (optional but recommended)
+TELEGRAM_WEBHOOK_SECRET=my-secret-string
+
+# ═══════════════════════════════════════════════════
+# Security (recommended for production)
+# ═══════════════════════════════════════════════════
+# Comma-separated Telegram user IDs allowed to manage the bot.
+# Only these users can generate/regenerate the dashboard PIN.
+# Leave empty to allow any user (NOT recommended for production).
+# Find your ID: send /start to @userinfobot on Telegram
+ADMIN_CHAT_IDS=
+
+# ═══════════════════════════════════════════════════
+# Agent Configuration
+# ═══════════════════════════════════════════════════
+# Default agent URL (used for single-agent setups)
+AGENT_URL=https://your-agent.workers.dev
+# Multi-agent list: Name|URL,Name|URL,...
+AGENTS=Simple Prompt Agent|https://your-agent.workers.dev
+
+# ═══════════════════════════════════════════════════
+# Cloudflare (for remote dev / deploy)
+# ═══════════════════════════════════════════════════
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_API_KEY=

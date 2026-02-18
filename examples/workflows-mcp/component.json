@@ -1,0 +1,26 @@
+{
+	"name": "workflows-mcp",
+	"type": "mcp",
+	"description": "Workflow orchestration (create, monitor, manage long-running tasks)",
+	"exports": {
+		"className": "WorkflowsMcpServer",
+		"binding": "WORKFLOWS_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod"
+	],
+	"routes": {
+		"pattern": "/mcp/workflows/*",
+		"method": "all"
+	},
+	"tools": [
+		"create_workflow",
+		"get_workflow_status",
+		"list_workflows",
+		"cancel_workflow",
+		"retry_workflow"
+	],
+	"tier": 1
+}

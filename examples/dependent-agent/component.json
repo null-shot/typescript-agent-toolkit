@@ -1,0 +1,25 @@
+{
+	"name": "dependent-agent",
+	"type": "agent",
+	"description": "Agent with external MCP tool support",
+	"exports": {
+		"className": "DependentAgent",
+		"binding": "DEPENDENT_AGENT"
+	},
+	"dependencies": [
+		"@ai-sdk/openai",
+		"@ai-sdk/anthropic",
+		"@ai-sdk/deepseek",
+		"@ai-sdk/xai",
+		"@nullshot/agent"
+	],
+	"env": {
+		"required": ["AI_PROVIDER"],
+		"secrets": ["OPEN_AI_API_KEY", "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY", "GROK_API_KEY"]
+	},
+	"routes": {
+		"pattern": "/agent/dependent/chat/:sessionId?",
+		"method": "all"
+	},
+	"requiresMcp": true
+}

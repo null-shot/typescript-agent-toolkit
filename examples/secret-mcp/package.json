@@ -14,11 +14,11 @@
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "catalog:",
-		"@types/node": "catalog:",
 		"@nullshot/test-utils": "workspace:*",
+		"@types/node": "catalog:",
 		"@vitest/runner": "catalog:",
 		"@vitest/snapshot": "catalog:",
-		"concurrently": "^9.1.2",
+		"concurrently": "^9.2.1",
 		"typescript": "catalog:",
 		"vitest": "catalog:",
 		"wrangler": "catalog:"

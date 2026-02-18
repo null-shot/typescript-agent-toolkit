@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Nullshot AI — Chat</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		:root {
+			--primary: #10b981;
+			--primary-dark: #059669;
+			--bg: #f9fafb;
+			--surface: #ffffff;
+			--text: #111827;
+			--text-secondary: #6b7280;
+			--border: #e5e7eb;
+			--user-bubble: #10b981;
+			--assistant-bubble: #f3f4f6;
+			--radius: 12px;
+		}
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: var(--bg);
+			color: var(--text);
+			min-height: 100vh;
+			display: flex;
+			flex-direction: column;
+		}
+
+		/* ── Header ─── */
+		header {
+			background: var(--surface);
+			border-bottom: 1px solid var(--border);
+			padding: 16px 24px;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 16px;
+		}
+		header h1 {
+			font-size: 18px;
+			font-weight: 700;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		header h1 span { font-size: 22px; }
+		.header-controls {
+			display: flex;
+			gap: 8px;
+			align-items: center;
+		}
+		.settings-btn {
+			padding: 8px 14px;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--surface);
+			color: var(--text-secondary);
+			font-size: 13px;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.settings-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+		/* ── Settings Panel ─── */
+		.settings-panel {
+			display: none;
+			background: var(--surface);
+			border-bottom: 1px solid var(--border);
+			padding: 16px 24px;
+		}
+		.settings-panel.open { display: block; }
+		.settings-panel label {
+			display: block;
+			font-size: 13px;
+			font-weight: 600;
+			color: var(--text-secondary);
+			margin-bottom: 4px;
+		}
+		.settings-panel input {
+			width: 100%;
+			max-width: 500px;
+			padding: 8px 12px;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			font-size: 14px;
+			margin-bottom: 12px;
+		}
+		.settings-panel input:focus {
+			outline: none;
+			border-color: var(--primary);
+		}
+		.settings-panel .save-btn {
+			padding: 8px 16px;
+			border: none;
+			border-radius: 8px;
+			background: var(--primary);
+			color: white;
+			font-size: 13px;
+			font-weight: 600;
+			cursor: pointer;
+		}
+		.settings-panel .save-btn:hover { background: var(--primary-dark); }
+
+		/* ── Chat Area ─── */
+		main {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			max-width: 800px;
+			width: 100%;
+			margin: 0 auto;
+			padding: 0;
+		}
+		.messages {
+			flex: 1;
+			overflow-y: auto;
+			padding: 24px;
+			display: flex;
+			flex-direction: column;
+			gap: 16px;
+		}
+		.message {
+			max-width: 75%;
+			padding: 12px 16px;
+			border-radius: var(--radius);
+			line-height: 1.5;
+			font-size: 14px;
+			white-space: pre-wrap;
+			word-wrap: break-word;
+		}
+		.message.user {
+			align-self: flex-end;
+			background: var(--user-bubble);
+			color: white;
+			border-bottom-right-radius: 4px;
+		}
+		.message.assistant {
+			align-self: flex-start;
+			background: var(--assistant-bubble);
+			color: var(--text);
+			border-bottom-left-radius: 4px;
+		}
+		.message.system {
+			align-self: center;
+			background: #fef3c7;
+			color: #92400e;
+			font-size: 12px;
+			max-width: 90%;
+			text-align: center;
+		}
+		.typing-indicator {
+			align-self: flex-start;
+			padding: 12px 16px;
+			background: var(--assistant-bubble);
+			border-radius: var(--radius);
+			border-bottom-left-radius: 4px;
+			display: none;
+		}
+		.typing-indicator.active { display: flex; gap: 4px; }
+		.typing-indicator span {
+			width: 8px;
+			height: 8px;
+			background: var(--text-secondary);
+			border-radius: 50%;
+			animation: bounce 1.4s infinite;
+		}
+		.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+		.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+		@keyframes bounce {
+			0%, 100% { transform: translateY(0); }
+			50% { transform: translateY(-4px); }
+		}
+
+		/* ── Input Area ─── */
+		.input-area {
+			padding: 16px 24px 24px;
+			background: var(--surface);
+			border-top: 1px solid var(--border);
+			display: flex;
+			gap: 12px;
+		}
+		.input-area input {
+			flex: 1;
+			padding: 12px 16px;
+			border: 2px solid var(--border);
+			border-radius: 24px;
+			font-size: 14px;
+			outline: none;
+			transition: border-color 0.2s;
+		}
+		.input-area input:focus { border-color: var(--primary); }
+		.input-area button {
+			padding: 12px 24px;
+			background: var(--primary);
+			color: white;
+			border: none;
+			border-radius: 24px;
+			font-size: 14px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: background 0.2s, transform 0.1s;
+		}
+		.input-area button:hover:not(:disabled) { background: var(--primary-dark); }
+		.input-area button:active:not(:disabled) { transform: scale(0.97); }
+		.input-area button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+		/* ── Empty State ─── */
+		.empty-state {
+			flex: 1;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			text-align: center;
+			color: var(--text-secondary);
+			padding: 40px;
+		}
+		.empty-state h2 { font-size: 20px; color: var(--text); margin-bottom: 8px; }
+		.empty-state p { font-size: 14px; max-width: 400px; }
+	</style>
+</head>
+<body>
+	<header>
+		<h1><span>⚡</span> Nullshot AI</h1>
+		<div class="header-controls">
+			<button class="settings-btn" id="settingsToggle">⚙️ Settings</button>
+			<button class="settings-btn" id="newChatBtn">🗑️ New Chat</button>
+		</div>
+	</header>
+
+	<div class="settings-panel" id="settingsPanel">
+		<label for="apiUrl">Agent API URL</label>
+		<input type="url" id="apiUrl" placeholder="https://your-worker.your-account.workers.dev" />
+		<label for="agentPath">Agent Path</label>
+		<input type="text" id="agentPath" placeholder="/agent/chat" value="/agent/chat" />
+		<br>
+		<button class="save-btn" id="saveSettings">Save Settings</button>
+	</div>
+
+	<main>
+		<div class="messages" id="messages">
+			<div class="empty-state" id="emptyState">
+				<div>
+					<h2>Welcome to Nullshot AI</h2>
+					<p>Connect to your deployed agent and start chatting. Open settings to set your Agent API URL.</p>
+				</div>
+			</div>
+		</div>
+		<div class="typing-indicator" id="typingIndicator">
+			<span></span><span></span><span></span>
+		</div>
+		<div class="input-area">
+			<input type="text" id="messageInput" placeholder="Type your message..." />
+			<button id="sendBtn">Send</button>
+		</div>
+	</main>
+
+	<script>
+		// ─── State ───
+		let sessionId = localStorage.getItem('sessionId') || crypto.randomUUID()
+		localStorage.setItem('sessionId', sessionId)
+
+		const messagesEl = document.getElementById('messages')
+		const emptyState = document.getElementById('emptyState')
+		const messageInput = document.getElementById('messageInput')
+		const sendBtn = document.getElementById('sendBtn')
+		const typingIndicator = document.getElementById('typingIndicator')
+		const settingsToggle = document.getElementById('settingsToggle')
+		const settingsPanel = document.getElementById('settingsPanel')
+		const apiUrlInput = document.getElementById('apiUrl')
+		const agentPathInput = document.getElementById('agentPath')
+		const saveSettingsBtn = document.getElementById('saveSettings')
+		const newChatBtn = document.getElementById('newChatBtn')
+
+		// ─── Settings ───
+		apiUrlInput.value = localStorage.getItem('apiUrl') || ''
+		agentPathInput.value = localStorage.getItem('agentPath') || '/agent/chat'
+
+		settingsToggle.addEventListener('click', () => {
+			settingsPanel.classList.toggle('open')
+		})
+
+		saveSettingsBtn.addEventListener('click', () => {
+			localStorage.setItem('apiUrl', apiUrlInput.value.replace(/\/$/, ''))
+			localStorage.setItem('agentPath', agentPathInput.value)
+			settingsPanel.classList.remove('open')
+			addMessage('system', 'Settings saved. API URL: ' + apiUrlInput.value)
+		})
+
+		newChatBtn.addEventListener('click', () => {
+			if (!confirm('Start a new conversation?')) return
+			sessionId = crypto.randomUUID()
+			localStorage.setItem('sessionId', sessionId)
+			messagesEl.innerHTML = ''
+			emptyState.style.display = 'flex'
+			messagesEl.appendChild(emptyState)
+		})
+
+		// ─── Chat Logic ───
+		const chatHistory = []
+
+		function addMessage(role, text) {
+			if (emptyState.parentNode === messagesEl) {
+				emptyState.style.display = 'none'
+			}
+
+			const div = document.createElement('div')
+			div.className = 'message ' + role
+			div.textContent = text
+			messagesEl.appendChild(div)
+			messagesEl.scrollTop = messagesEl.scrollHeight
+
+			if (role === 'user' || role === 'assistant') {
+				chatHistory.push({ role, content: text })
+			}
+		}
+
+		async function sendMessage() {
+			const text = messageInput.value.trim()
+			if (!text) return
+
+			const apiUrl = localStorage.getItem('apiUrl')
+			if (!apiUrl) {
+				addMessage('system', 'Please set the Agent API URL in Settings first.')
+				settingsPanel.classList.add('open')
+				return
+			}
+
+			const agentPath = localStorage.getItem('agentPath') || '/agent/chat'
+			addMessage('user', text)
+			messageInput.value = ''
+			sendBtn.disabled = true
+			typingIndicator.classList.add('active')
+
+			try {
+				const url = `${apiUrl}${agentPath}/${sessionId}`
+				const response = await fetch(url, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						id: sessionId,
+						messages: chatHistory
+					})
+				})
+
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => 'Unknown error')}`)
+				}
+
+				// Parse streaming response
+				const reader = response.body.getReader()
+				const decoder = new TextDecoder()
+				let fullText = ''
+				let buffer = ''
+				const NL = String.fromCharCode(10)
+
+				const assistantDiv = document.createElement('div')
+				assistantDiv.className = 'message assistant'
+				messagesEl.appendChild(assistantDiv)
+
+				while (true) {
+					const { done, value } = await reader.read()
+					if (done) {
+						if (buffer.trim()) {
+							const parsed = parseChunk(buffer)
+							if (parsed) fullText += parsed
+						}
+						break
+					}
+
+					buffer += decoder.decode(value, { stream: true })
+					const lines = buffer.split(NL)
+					buffer = lines.pop() || ''
+
+					for (const line of lines) {
+						if (!line.trim()) continue
+						const parsed = parseChunk(line)
+						if (parsed !== null) {
+							fullText += (typeof parsed === 'string') ? parsed : JSON.stringify(parsed)
+						}
+					}
+
+					if (fullText) {
+						assistantDiv.textContent = fullText
+						messagesEl.scrollTop = messagesEl.scrollHeight
+					}
+				}
+
+				typingIndicator.classList.remove('active')
+
+				if (!fullText.trim()) {
+					assistantDiv.textContent = '(empty response)'
+				}
+
+				chatHistory.push({ role: 'assistant', content: fullText })
+
+			} catch (error) {
+				typingIndicator.classList.remove('active')
+				addMessage('system', 'Error: ' + error.message)
+			} finally {
+				sendBtn.disabled = false
+				messageInput.focus()
+			}
+		}
+
+		function parseChunk(chunk) {
+			if (!chunk || !chunk.trim()) return null
+			const colonIdx = chunk.indexOf(':')
+			if (colonIdx < 1 || colonIdx > 2) return null
+			const prefix = chunk.substring(0, colonIdx)
+			if (prefix !== '0') return null
+			try {
+				return JSON.parse(chunk.substring(colonIdx + 1))
+			} catch {
+				return chunk.substring(colonIdx + 1)
+			}
+		}
+
+		// ─── Event Listeners ───
+		sendBtn.addEventListener('click', sendMessage)
+		messageInput.addEventListener('keypress', (e) => {
+			if (e.key === 'Enter') sendMessage()
+		})
+
+		// Focus input on load
+		messageInput.focus()
+	</script>
+</body>
+</html>

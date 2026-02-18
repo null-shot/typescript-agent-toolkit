@@ -1,0 +1,95 @@
+/**
+ * Single Worker — AI Agent + Playground UI + MCP Servers
+ *
+ * All components run in a single worker.
+ * Zero subrequests between components — all internal Durable Object calls.
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "single-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-02-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "development",
+    "AI_PROVIDER": "workers-ai", // workers-ai (free), anthropic, openai, deepseek, google, grok
+    "MODEL_ID": "", // Optional model override (e.g. "gpt-4o", "claude-3-haiku-20240307")
+    "DEFAULT_NAME": "World", // Used by EnvVariableMcpServer
+    "SECRET_NUMBER": "42", // Used by SecretMcpServer
+  },
+  // API keys: set via `wrangler secret put <KEY>` or .dev.vars for local dev
+  // ANTHROPIC_API_KEY, OPEN_AI_API_KEY, DEEPSEEK_API_KEY,
+  // GOOGLE_API_KEY, GROK_API_KEY, AI_PROVIDER_API_KEY
+  // Durable Objects for Agents and MCP Servers
+  "durable_objects": {
+    "bindings": [
+      // Agents
+      {
+        "name": "SIMPLE_PROMPT_AGENT",
+        "class_name": "SimplePromptAgent",
+      },
+      {
+        "name": "DEPENDENT_AGENT",
+        "class_name": "DependentAgent",
+      },
+      // MCP Servers
+      {
+        "name": "TODO_MCP",
+        "class_name": "TodoMcpServer",
+      },
+      {
+        "name": "EXPENSE_MCP",
+        "class_name": "ExpenseMcpServer",
+      },
+      {
+        "name": "ENV_VARIABLE_MCP",
+        "class_name": "EnvVariableMcpServer",
+      },
+      {
+        "name": "SECRET_MCP",
+        "class_name": "SecretMcpServer",
+      },
+      {
+        "name": "IMAGE_MCP",
+        "class_name": "ImageMcpServer",
+      },
+      {
+        "name": "VOICE_MCP",
+        "class_name": "VoiceMcpServer",
+      },
+    ],
+  },
+  // Migrations for Durable Objects
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "SimplePromptAgent",
+        "DependentAgent",
+        "TodoMcpServer",
+        "ExpenseMcpServer",
+        "EnvVariableMcpServer",
+        "SecretMcpServer",
+      ],
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["ImageMcpServer", "VoiceMcpServer"],
+    },
+  ],
+  // Workers AI (for LLM inference)
+  "ai": {
+    "binding": "AI",
+  },
+  // Vectorize (optional, uncomment if you need RAG / long-term memory)
+  // "vectorize": [
+  //   {
+  //     "binding": "CHAT_MEMORY",
+  //     "index_name": "single-worker-memory",
+  //   },
+  // ],
+  // Observability
+  "observability": {
+    "enabled": true,
+  },
+}

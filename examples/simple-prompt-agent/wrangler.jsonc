@@ -51,15 +51,11 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
 	"vars": {
-		"AI_PROVIDER": "workers-ai",
+		// AI_PROVIDER устанавливается через secret (wrangler secret put AI_PROVIDER)
+		// Для production используйте: wrangler secret put AI_PROVIDER
 		"USE_MOCK_AI": "false",
-		"OPEN_AI_API_KEY": "",
-		"ANTHROPIC_API_KEY": "",
-		"CLOUDFLARE_ACCOUNT_ID": "",
-		"CLOUDFLARE_API_KEY": "",
-		"DEEPSEEK_API_KEY": "",
-		"GOOGLE_API_KEY": "",
-		"GROK_API_KEY": "",
+		// API ключи устанавливаются через secrets, не через vars
+		// Для production используйте: wrangler secret put ANTHROPIC_API_KEY (или другой провайдер)
 	},
 	/**
 	 * Note: Use secrets to store sensitive data.

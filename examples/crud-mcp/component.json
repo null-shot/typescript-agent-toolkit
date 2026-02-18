@@ -1,0 +1,25 @@
+{
+	"name": "crud-mcp",
+	"type": "mcp",
+	"description": "CRUD operations (todo management)",
+	"exports": {
+		"className": "TodoMcpServer",
+		"binding": "TODO_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod"
+	],
+	"routes": {
+		"pattern": "/mcp/todo/*",
+		"method": "all"
+	},
+	"tools": [
+		"create_todo",
+		"list_todos",
+		"complete_todo",
+		"delete_todo"
+	],
+	"tier": 1
+}

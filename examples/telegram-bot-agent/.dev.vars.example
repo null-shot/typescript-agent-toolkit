@@ -1,0 +1,22 @@
+# Telegram Bot Configuration
+# Get your bot token from @BotFather on Telegram
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+
+# Agent URL - where to forward messages
+# For local development, use: http://localhost:8787
+# For production, use your deployed agent URL: https://your-agent.workers.dev
+AGENT_URL=http://localhost:8787
+
+# Optional: Webhook secret for security (recommended for production)
+TELEGRAM_WEBHOOK_SECRET=optional_secret_here
+
+# Bot owner's Telegram user ID (optional)
+# If set, this user always has admin privileges.
+# If not set, the first user to /start the bot in DM auto-claims ownership.
+# Get your user ID from @userinfobot on Telegram.
+# OWNER_ID=123456789
+
+# AI Provider Configuration (if using embedded agent)
+# Uncomment and configure if you want to embed an agent directly
+# AI_PROVIDER=anthropic
+# ANTHROPIC_API_KEY=your_anthropic_key_here

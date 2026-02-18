@@ -1,0 +1,27 @@
+{
+	"name": "kv-mcp",
+	"type": "mcp",
+	"description": "Key-Value storage (requires KV namespace)",
+	"exports": {
+		"className": "KvMcpServer",
+		"binding": "KV_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod"
+	],
+	"routes": {
+		"pattern": "/mcp/kv/*",
+		"method": "all"
+	},
+	"tools": [
+		"kv_set",
+		"kv_get",
+		"kv_list",
+		"kv_delete"
+	],
+	"tier": 2,
+	"disabled": true,
+	"disabledReason": "Requires KV namespace binding"
+}

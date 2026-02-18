@@ -34,7 +34,7 @@
     "@cloudflare/workers-types": "catalog:",
     "@nullshot/test-utils": "workspace:*",
     "@types/node": "catalog:",
-    "concurrently": "^9.1.2",
+    "concurrently": "^9.2.1",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

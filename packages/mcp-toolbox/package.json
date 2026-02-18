@@ -19,22 +19,22 @@
     "codegen": "wrangler types"
   },
   "dependencies": {
-    "@hono/node-server": "^1.12.0",
-    "hono": "^4.8.2",
+    "@hono/node-server": "^1.19.9",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@nullshot/mcp": "workspace:*",
+    "hono": "^4.11.9",
     "sql.js": "^1.13.0",
-    "ws": "^8.18.0",
-    "zod": "catalog:",
-    "@modelcontextprotocol/sdk": "^1.13.0",
-    "@nullshot/mcp": "workspace:*"
+    "ws": "^8.19.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "@types/ws": "^8.5.12",
     "@types/sql.js": "^1.4.9",
+    "@types/ws": "^8.18.1",
+    "@vitest/ui": "catalog:",
     "esbuild": "catalog:",
-    "tsx": "^4.19.0",
+    "tsx": "^4.21.0",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "@vitest/ui": "catalog:"
+    "vitest": "catalog:"
   }
 }

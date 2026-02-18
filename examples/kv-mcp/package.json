@@ -4,18 +4,26 @@
 	"private": true,
 	"license": "MIT",
 	"scripts": {
-		"deploy": "wrangler deploy",
-		"build": "tsc --noEmit && wrangler deploy --dry-run",
+		"deploy": "wrangler deploy --env=\"\"",
+		"deploy:dev": "wrangler deploy --env development",
+		"deploy:staging": "wrangler deploy --env staging",
+		"deploy:prod": "wrangler deploy --env production",
 		"dev": "concurrently \"npx @modelcontextprotocol/inspector\" \"wrangler dev\" --kill-others",
+		"dev:staging": "wrangler dev --env staging",
+		"dev:prod": "wrangler dev --env production",
 		"start": "wrangler dev",
+		"build": "tsc --noEmit && wrangler deploy --dry-run",
 		"test": "vitest run",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"kv:list": "wrangler kv:namespace list",
+		"kv:create": "wrangler kv:namespace create kv_namespace_tet",
+		"kv:create:preview": "wrangler kv:namespace create kv_namespace_tet --preview"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "catalog:",
-		"@types/node": "catalog:",
 		"@nullshot/test-utils": "workspace:*",
-		"concurrently": "^9.1.2",
+		"@types/node": "catalog:",
+		"concurrently": "^9.2.1",
 		"typescript": "catalog:",
 		"vitest": "catalog:",
 		"wrangler": "catalog:"

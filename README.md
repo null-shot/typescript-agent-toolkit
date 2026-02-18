@@ -48,41 +48,53 @@ This project is in pre-alpha and actively evolving. Current focus areas:
 
 ## Quick Start
 
-Get started with the Null Shot CLI to create MCP servers and AI agents:
+### Deploy a Single Worker (recommended)
 
-### Install the CLI
+The fastest way to get a fully working AI Agent with MCP tools, Telegram Bot, and a web UI:
 
 ```bash
+# Clone and install
+git clone https://github.com/nullshot/typescript-agent-vibework.git
+cd typescript-agent-vibework
+pnpm install && pnpm build
+
+# Launch the deploy wizard
+pnpm nullshot deploy
+```
+
+The wizard walks you through:
+
+1. **Select AI Agents** — SimplePromptAgent (chat), DependentAgent (with tools)
+2. **Select MCP Servers** — todo, expense, env-variable, secret (and more)
+3. **Playground UI** — web chat interface with agent switcher
+4. **Telegram Bot** — optional, prompts for bot token
+5. **AI Provider** — Anthropic, OpenAI, Google Gemini, DeepSeek, xAI
+
+It automatically creates KV namespaces, sets secrets, deploys to Cloudflare Workers, and configures the Telegram webhook.
+
+> **Want to run locally first?** See the [Single Worker Example](examples/single-worker/) for local dev setup.
+
+### Or: start from scratch
+
+Use the CLI to scaffold individual components:
+
+```bash
+# Install CLI globally
 npm install -g @nullshot/cli
-```
 
-### Create a new MCP server
-
-```bash
+# Create a new MCP server
 nullshot create mcp
-```
 
-### Create a new Agent
-
-```bash
+# Create a new Agent
 nullshot create agent
-```
 
-### Initialize MCP configuration in existing project
-
-```bash
+# Initialize MCP configuration in existing project
 nullshot init
-```
 
-### Install MCP dependencies
-
-```bash
+# Install MCP dependencies
 nullshot install
-```
 
-### Run in development mode
-
-```bash
+# Run in development mode
 nullshot dev
 ```
 
@@ -146,6 +158,106 @@ If you're interested in contributing, please:
 1. Join our [Discord community](https://discord.gg/acwpp6zWEc)
 2. Watch this repository for updates
 3. Star the project if you find it interesting
+
+## 🧪 Testing & Development
+
+### Updated Toolkit - How to Test
+
+This repository includes working examples for MCP servers, AI agents, and playground interfaces.
+
+#### Prerequisites
+
+```bash
+# Install dependencies at root
+pnpm install
+
+# Build all packages
+pnpm build
+```
+
+#### MCP Server Examples
+
+| Example | Description | Test Command |
+|---------|-------------|--------------|
+| `crud-mcp` | CRUD operations with D1 | `cd examples/crud-mcp && pnpm dev` |
+| `kv-mcp` | Workers KV storage | `cd examples/kv-mcp && pnpm dev` |
+| `analytics-mcp` | Analytics Engine integration | `cd examples/analytics-mcp && pnpm dev` |
+| `email-mcp` | Email sending via MailChannels | `cd examples/email-mcp && pnpm dev` |
+| `image-mcp` | Image generation with Workers AI | `cd examples/image-mcp && pnpm dev` |
+| `vectorize-mcp` | Vector search with Vectorize | `cd examples/vectorize-mcp && pnpm dev` |
+| `browser-mcp` | Browser automation | `cd examples/browser-mcp && pnpm dev` |
+| `secret-mcp` | Secrets management | `cd examples/secret-mcp && pnpm dev` |
+| `env-variable-mcp` | Environment variables | `cd examples/env-variable-mcp && pnpm dev` |
+
+#### Single Worker (all-in-one)
+
+| Example | Description | Test Command |
+|---------|-------------|--------------|
+| **`single-worker`** | **All agents + MCPs + Telegram + Dashboard in one worker** | `cd examples/single-worker && pnpm dev` |
+
+This is what `nullshot deploy` generates. See [examples/single-worker/README.md](examples/single-worker/README.md) for full docs.
+
+#### AI Agent Examples
+
+| Example | Description | Test Command |
+|---------|-------------|--------------|
+| `simple-prompt-agent` | Basic AI chat agent | `cd examples/simple-prompt-agent && pnpm dev` |
+| `dependent-agent` | Agent with MCP dependencies | `cd examples/dependent-agent && pnpm dev` |
+| `telegram-bot-agent` | Telegram bot integration | `cd examples/telegram-bot-agent && pnpm dev` |
+| `queues-agent` | Async processing with Queues | `cd examples/queues-agent && pnpm dev` |
+
+#### Playground Interfaces
+
+```bash
+# Main Playground (Next.js 15 + shadcn/ui)
+cd packages/playground && pnpm dev
+# Open http://localhost:3000
+
+# Lightweight Playground (Hono Worker - deployable to Cloudflare)
+cd examples/playground-worker && pnpm dev
+# Open http://localhost:8790
+```
+
+#### Running Tests
+
+```bash
+# Run all tests
+pnpm test
+
+# Run tests for specific package
+cd packages/mcp && pnpm test
+
+# Watch mode
+pnpm test:watch
+```
+
+#### Deploy to Cloudflare
+
+```bash
+# Deploy everything as a single worker (recommended)
+pnpm nullshot deploy
+
+# Or deploy individual examples
+cd examples/<example-name>
+pnpm run deploy
+```
+
+### Environment Variables
+
+Create `.dev.vars` file in each example directory with required secrets:
+
+```bash
+# AI Provider Keys (choose one or more)
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+XAI_API_KEY=xai-...
+GOOGLE_GENERATIVE_AI_API_KEY=...
+DEEPSEEK_API_KEY=...
+
+# For telegram-bot-agent
+TELEGRAM_BOT_TOKEN=...
+AGENT_WORKER_URL=https://your-agent.workers.dev
+```
 
 ## License
 

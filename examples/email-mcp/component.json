@@ -1,0 +1,26 @@
+{
+	"name": "email-mcp",
+	"type": "mcp",
+	"description": "Email Workers integration",
+	"exports": {
+		"className": "EmailMcpServer",
+		"binding": "EMAIL_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod"
+	],
+	"routes": {
+		"pattern": "/mcp/email/*",
+		"method": "all"
+	},
+	"tools": [
+		"send_email",
+		"list_emails",
+		"get_email"
+	],
+	"tier": 3,
+	"disabled": true,
+	"disabledReason": "Requires Email Workers + D1 database"
+}

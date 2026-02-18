@@ -1,6 +1,7 @@
 packages:
   - "packages/*"
   - "examples/*"
+  - ".nullshot-bundle"
 
 # This is a catalog of dependencies that are shared across the project.
 # We need to keep up to date with our workers env from cloudflare here https://github.com/cloudflare/workers-sdk/blob/main/pnpm-workspace.yaml

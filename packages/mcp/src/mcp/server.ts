@@ -30,11 +30,26 @@ export abstract class McpServerDO<Env = unknown> extends DurableObject<Env> {
 		super(ctx, env);
 		this.ctx = ctx; // Store ctx for subclass access
 
-		if (!server) {
-			// Only call configureServer if we have a real McpServer instance (not a proxy)
-			this.configureServer((this.server = new McpServer(this.getImplementation())));
-		} else {
-			this.server = server;
+		try {
+			if (!server) {
+				// Only call configureServer if we have a real McpServer instance (not a proxy)
+				console.log(`[MCP Server] Initializing MCP server: ${this.getImplementation().name}`);
+				const mcpServer = new McpServer(this.getImplementation());
+				this.server = mcpServer;
+				const configureResult = this.configureServer(mcpServer);
+				if (configureResult instanceof Promise) {
+					// If configureServer is async, we can't await it in constructor
+					// Log a warning but continue - the server will be configured
+					console.warn(`[MCP Server] configureServer returned a Promise - async configuration may not complete before first request`);
+				}
+				console.log(`[MCP Server] MCP server initialized: ${this.getImplementation().name}`);
+			} else {
+				this.server = server;
+				console.log(`[MCP Server] Using provided server instance`);
+			}
+		} catch (error) {
+			console.error(`[MCP Server] Error initializing MCP server:`, error);
+			throw error;
 		}
 	}
 
@@ -194,45 +209,65 @@ export abstract class McpServerDO<Env = unknown> extends DurableObject<Env> {
 		return null;
 	}
 
-	protected processMcpRequest(request: Request) {
-		const contentType = request.headers.get('content-type') || '';
-		if (!contentType.includes('application/json')) {
-			return new Response(`Unsupported content-type: ${contentType}`, {
-				status: 400,
-			});
-		}
+	protected async processMcpRequest(request: Request): Promise<Response> {
+		try {
+			const contentType = request.headers.get('content-type') || '';
+			if (!contentType.includes('application/json')) {
+				console.warn(`[MCP Server] Unsupported content-type: ${contentType}`);
+				return new Response(`Unsupported content-type: ${contentType}`, {
+					status: 400,
+				});
+			}
 
-		// Check if the request body is too large
-		const contentLength = Number.parseInt(request.headers.get('content-length') || '0', 10);
+			// Check if the request body is too large
+			const contentLength = Number.parseInt(request.headers.get('content-length') || '0', 10);
 
-		if (contentLength > MAXIMUM_MESSAGE_SIZE) {
-			return new Response(`Request body too large: ${contentLength} bytes`, {
-				status: 400,
-			});
-		}
+			if (contentLength > MAXIMUM_MESSAGE_SIZE) {
+				console.warn(`[MCP Server] Request body too large: ${contentLength} bytes`);
+				return new Response(`Request body too large: ${contentLength} bytes`, {
+					status: 400,
+				});
+			}
 
-		const url = new URL(request.url);
-		const sessionId = url.searchParams.get('sessionId');
-		if (!sessionId) {
-			return new Response(`Missing sessionId parameter`, {
-				status: 400,
-			});
-		}
+			const url = new URL(request.url);
+			const sessionId = url.searchParams.get('sessionId');
+			if (!sessionId) {
+				console.warn(`[MCP Server] Missing sessionId parameter`);
+				return new Response(`Missing sessionId parameter`, {
+					status: 400,
+				});
+			}
 
-		const transport = this.sessions.get(sessionId);
-		if (!transport) {
-			return new Response(`Session not found`, {
-				status: 404,
-			});
-		}
+			const transport = this.sessions.get(sessionId);
+			if (!transport) {
+				console.warn(`[MCP Server] Session not found: ${sessionId}. Active sessions: ${Array.from(this.sessions.keys()).join(', ')}`);
+				return new Response(`Session not found`, {
+					status: 404,
+				});
+			}
 
-		// Only SSE transports handle POST messages since WebSocket messages are handled by the webSocketMessage method
-		if (transport instanceof SSETransport) {
-			return transport.handlePostMessage(request);
-		} else {
-			return new Response(`Cannot send message to non-SSE transport`, {
-				status: 400,
-			});
+			// Only SSE transports handle POST messages since WebSocket messages are handled by the webSocketMessage method
+			if (transport instanceof SSETransport) {
+				console.log(`[MCP Server] Processing POST message for SSE session: ${sessionId}`);
+				return await transport.handlePostMessage(request);
+			} else {
+				console.warn(`[MCP Server] Cannot send message to non-SSE transport for session: ${sessionId}`);
+				return new Response(`Cannot send message to non-SSE transport`, {
+					status: 400,
+				});
+			}
+		} catch (error) {
+			console.error(`[MCP Server] Error processing MCP request:`, error);
+			return new Response(
+				JSON.stringify({
+					error: 'Internal server error',
+					message: error instanceof Error ? error.message : String(error),
+				}),
+				{
+					status: 500,
+					headers: { 'Content-Type': 'application/json' },
+				},
+			);
 		}
 	}
 
@@ -240,25 +275,42 @@ export abstract class McpServerDO<Env = unknown> extends DurableObject<Env> {
 	 * Main fetch handler
 	 */
 	async fetch(request: Request): Promise<Response> {
-		const url = new URL(request.url);
-		const path = url.pathname;
+		try {
+			const url = new URL(request.url);
+			const path = url.pathname;
 
-		// Process WebSocket upgrade requests
-		if (path.endsWith(WEBSOCKET_ENDPOINT)) {
-			return this.processWebSocketConnection(request);
+			console.log(`[MCP Server] fetch: ${request.method} ${path}`);
+
+			// Process WebSocket upgrade requests
+			if (path.endsWith(WEBSOCKET_ENDPOINT)) {
+				return this.processWebSocketConnection(request);
+			}
+
+			// Process SSE connection requests
+			if (path.endsWith('/sse')) {
+				return this.processSSEConnection(request);
+			}
+
+			// Process SSE message requests
+			if (path.endsWith(SSE_MESSAGE_ENDPOINT)) {
+				return await this.processMcpRequest(request);
+			}
+
+			// Default response for unhandled paths
+			console.warn(`[MCP Server] Unhandled path: ${path}`);
+			return new Response('Not found', { status: 404 });
+		} catch (error) {
+			console.error(`[MCP Server] Error in fetch handler:`, error);
+			return new Response(
+				JSON.stringify({
+					error: 'Internal server error',
+					message: error instanceof Error ? error.message : String(error),
+				}),
+				{
+					status: 500,
+					headers: { 'Content-Type': 'application/json' },
+				},
+			);
 		}
-
-		// Process SSE connection requests
-		if (path.endsWith('/sse')) {
-			return this.processSSEConnection(request);
-		}
-
-		// Process SSE message requests
-		if (path.endsWith(SSE_MESSAGE_ENDPOINT)) {
-			return this.processMcpRequest(request);
-		}
-
-		// Default response for unhandled paths
-		return new Response('Not found', { status: 404 });
 	}
 }

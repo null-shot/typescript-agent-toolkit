@@ -1,0 +1,81 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "telegram-bot-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "<YOUR_KV_NAMESPACE_ID>", // Production KV namespace — run: wrangler kv namespace create SESSIONS
+      "preview_id": "<YOUR_KV_PREVIEW_ID>", // Preview KV namespace — run: wrangler kv namespace create SESSIONS --preview
+    },
+  ],
+  /**
+   * Environment Variables
+   * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+   */
+  "vars": {
+    "AGENT_URL": "https://your-agent.your-subdomain.workers.dev", // Default agent URL (fallback)
+    // AGENTS format: "name1|url1|description1,name2|url2|description2"
+    // Example: "Simple Agent|https://agent1.workers.dev|Default assistant,Queue Agent|https://agent2.workers.dev|Async processing"
+    // Set via: wrangler secret put AGENTS (or as env var for multiple agents)
+    "AGENTS": "Simple Prompt Agent|https://your-agent.your-subdomain.workers.dev,Dependent Agent|https://your-dependent-agent.your-subdomain.workers.dev",
+  },
+  /**
+   * Service Bindings (communicate between multiple Workers)
+   * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
+   *
+   * Service bindings allow direct communication between Workers without HTTP
+   * This is more reliable than HTTP fetch for Worker-to-Worker communication
+   */
+  "services": [
+    {
+      "binding": "AGENT_SERVICE",
+      "service": "simple-prompt-agent",
+    },
+  ],
+  /**
+   * Workers AI binding — enables on-device AI inference (embeddings, LLM, image gen).
+   * Used for: chat memory (BGE-M3 embeddings), spam moderation (DistilBERT),
+   * support answers (Llama 8B), content generation (Llama 70B), image gen (FLUX).
+   * Free tier: 10,000 Neurons/day.
+   */
+  "ai": {
+    "binding": "AI",
+  },
+  /**
+   * Vectorize index for semantic chat memory.
+   * Stores embeddings of every group message for semantic search.
+   * Create with: wrangler vectorize create chat-memory --dimensions=1024 --metric=cosine
+   */
+  "vectorize": [
+    {
+      "binding": "CHAT_MEMORY",
+      "index_name": "chat-memory",
+    },
+  ],
+  /**
+   * Cron Triggers for scheduled posts
+   * https://developers.cloudflare.com/workers/configuration/cron-triggers/
+   *
+   * Runs every minute to process scheduled posts
+   */
+  "triggers": {
+    "crons": ["* * * * *"],
+  },
+  /**
+   * Note: Use secrets to store sensitive data.
+   * https://developers.cloudflare.com/workers/configuration/secrets/
+   *
+   * Set secrets with:
+   * wrangler secret put TELEGRAM_BOT_TOKEN
+   */
+}

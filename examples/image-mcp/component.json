@@ -1,0 +1,27 @@
+{
+	"name": "image-mcp",
+	"type": "mcp",
+	"description": "Image metadata (requires R2 bucket)",
+	"exports": {
+		"className": "ImageMcpServer",
+		"binding": "IMAGE_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod"
+	],
+	"routes": {
+		"pattern": "/mcp/image/*",
+		"method": "all"
+	},
+	"tools": [
+		"add_image",
+		"list_images",
+		"get_image",
+		"delete_image"
+	],
+	"tier": 3,
+	"disabled": true,
+	"disabledReason": "Requires R2 bucket"
+}

@@ -1,0 +1,197 @@
+/**
+ * Single Worker Example
+ *
+ * Demonstrates the single-worker architecture with:
+ * - Playground UI (/)
+ * - Agent (Durable Object) - based on simple-prompt-agent
+ * - MCP Server (Durable Object) - embedded todo tools
+ *
+ * All in ONE worker = 0 subrequests between components!
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "nullshot-worker",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-04-22",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true,
+	},
+	/**
+   * Durable Objects - Agents and MCP server
+   */
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "AGENT",
+				"class_name": "SimplePromptAgent",
+			},
+			{
+				"name": "SIMPLE_PROMPT_AGENT",
+				"class_name": "SimplePromptAgent",
+			},
+			{
+				"name": "DEPENDENT_AGENT",
+				"class_name": "DependentAgent",
+			},
+			{
+				"name": "TODO_MCP",
+				"class_name": "TodoMcpServer",
+			},
+			{
+				"name": "EXPENSE_MCP",
+				"class_name": "ExpenseMcpServer",
+			},
+			{
+				"name": "ENV_VARIABLE_MCP",
+				"class_name": "EnvVariableMcpServer",
+			},
+		{
+			"name": "SECRET_MCP",
+			"class_name": "SecretMcpServer",
+		},
+		{
+			"name": "IMAGE_MCP",
+			"class_name": "ImageMcpServer",
+		},
+		{
+			"name": "VOICE_MCP",
+			"class_name": "VoiceMcpServer",
+		},
+	],
+},
+	/**
+   * Migrations for Durable Objects
+   *
+   * v1: original 3 DOs (already deployed)
+   * v2: add 3 new MCP servers
+   */
+	"migrations": [
+		{
+			"tag": "do-SimplePromptAgent",
+			"new_sqlite_classes": [
+				"SimplePromptAgent"
+			],
+		},
+		{
+			"tag": "do-DependentAgent",
+			"new_sqlite_classes": [
+				"DependentAgent"
+			],
+		},
+		{
+			"tag": "do-TodoMcpServer",
+			"new_sqlite_classes": [
+				"TodoMcpServer"
+			],
+		},
+		{
+			"tag": "do-ExpenseMcpServer",
+			"new_sqlite_classes": [
+				"ExpenseMcpServer"
+			],
+		},
+		{
+			"tag": "do-EnvVariableMcpServer",
+			"new_sqlite_classes": [
+				"EnvVariableMcpServer"
+			],
+		},
+	{
+		"tag": "do-SecretMcpServer",
+		"new_sqlite_classes": [
+			"SecretMcpServer"
+		],
+	},
+	{
+		"tag": "do-ImageVoiceMcp",
+		"new_sqlite_classes": [
+			"ImageMcpServer",
+			"VoiceMcpServer"
+		],
+	},
+],
+	/**
+   * Workers AI binding — enables on-device AI inference (embeddings, LLM, image gen).
+   * Free tier: 10,000 Neurons/day.
+   */
+	"ai": {
+		"binding": "AI",
+	},
+	/**
+   * Vectorize index for semantic chat memory.
+   * Create with: wrangler vectorize create chat-memory --dimensions=1024 --metric=cosine
+   */
+	"vectorize": [
+		{
+			"binding": "CHAT_MEMORY",
+			"index_name": "chat-memory",
+		},
+	],
+	/**
+   * KV Namespaces
+   * Used by Telegram Bot Agent for sessions, channels, moderation, etc.
+   */
+	"kv_namespaces": [
+		{
+			"binding": "SESSIONS",
+			"id": "<YOUR_KV_NAMESPACE_ID>",
+			"preview_id": "<YOUR_KV_PREVIEW_ID>",
+		},
+	],
+	/**
+   * Cron Triggers
+   * Used by Telegram Bot Agent for processing scheduled/recurring posts.
+   * Runs every minute — recurring tasks use their own cron expressions internally.
+   */
+	"triggers": {
+		"crons": [
+			"* * * * *"
+		],
+	},
+	/**
+   * Environment Variables
+   * Set API keys via: wrangler secret put OPENAI_API_KEY
+   * Set Telegram token: wrangler secret put TELEGRAM_BOT_TOKEN
+   */
+	"vars": {
+		"AI_PROVIDER": "workers-ai",
+		"ENVIRONMENT": "development",
+		"DEFAULT_NAME": "World",
+		"SECRET_NUMBER": "42",
+		// Agent names (URLs are ignored — single-worker routes internally via Durable Objects)
+		"AGENTS": "Simple Prompt Agent,Dependent Agent",
+		// Comma-separated Telegram user IDs for admin access.
+		// Only these users can generate dashboard PINs.
+		// Leave empty to allow any user (not recommended for production).
+		"ADMIN_CHAT_IDS": "",
+	},
+	"env": {
+		"staging": {
+			"vars": {
+				"AI_PROVIDER": "workers-ai",
+				"ENVIRONMENT": "staging",
+			},
+		},
+		"production": {
+			"vars": {
+				"AI_PROVIDER": "workers-ai",
+				"ENVIRONMENT": "production",
+			},
+		},
+		"openai": {
+			"vars": {
+				"AI_PROVIDER": "openai",
+				"ENVIRONMENT": "development",
+			},
+		},
+		"deepseek": {
+			"vars": {
+				"AI_PROVIDER": "deepseek",
+				"ENVIRONMENT": "development",
+			},
+		},
+	},
+}

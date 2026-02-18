@@ -1,0 +1,29 @@
+{
+  "name": "@examples/single-worker",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "catalog:",
+    "@ai-sdk/deepseek": "catalog:",
+    "@ai-sdk/google": "catalog:",
+    "@ai-sdk/openai": "catalog:",
+    "@ai-sdk/xai": "catalog:",
+    "@modelcontextprotocol/sdk": "catalog:",
+    "@nullshot/agent": "workspace:*",
+    "@nullshot/mcp": "workspace:*",
+    "ai": "catalog:",
+    "hono": "^4.11.9",
+    "workers-ai-provider": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "typescript": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

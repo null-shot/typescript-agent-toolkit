@@ -1,0 +1,45 @@
+{
+	"name": "telegram-bot-agent",
+	"type": "agent",
+	"description": "Telegram bot agent with multi-agent support, channel management, moderation, scheduling, and proactive responses",
+	"exports": {
+		"className": "TelegramBotHandler",
+		"binding": "TELEGRAM_BOT"
+	},
+	"dependencies": [
+		"grammy",
+		"hono"
+	],
+	"routes": {
+		"pattern": "/telegram/*",
+		"method": "all"
+	},
+	"bindings": {
+		"kv": [
+			{
+				"binding": "SESSIONS",
+				"description": "KV namespace for session data, channel config, moderation settings, scheduled posts"
+			}
+		],
+		"vars": [
+			"TELEGRAM_BOT_TOKEN",
+			"AGENT_URL",
+			"AGENTS",
+			"TELEGRAM_WEBHOOK_SECRET",
+			"LOG_CHAT_ID"
+		],
+		"crons": ["* * * * *"]
+	},
+	"features": [
+		"webhook-based",
+		"multi-agent",
+		"channel-management",
+		"content-generation",
+		"scheduled-posts",
+		"moderation",
+		"proactive-responses",
+		"role-based-setup",
+		"natural-language-tasks",
+		"activity-logging"
+	]
+}

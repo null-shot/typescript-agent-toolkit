@@ -1,0 +1,25 @@
+{
+	"name": "expense-mcp",
+	"type": "mcp",
+	"description": "Expense tracking & summaries",
+	"exports": {
+		"className": "ExpenseMcpServer",
+		"binding": "EXPENSE_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod"
+	],
+	"routes": {
+		"pattern": "/mcp/expense/*",
+		"method": "all"
+	},
+	"tools": [
+		"submit_expense",
+		"approve_expense",
+		"reject_expense",
+		"list_expenses"
+	],
+	"tier": 1
+}

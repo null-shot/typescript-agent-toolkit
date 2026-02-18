@@ -12,16 +12,19 @@
     "postinstall": "nullshot install"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^2.0.9",
+    "@ai-sdk/anthropic": "^2.0.61",
+    "@ai-sdk/deepseek": "^0.1.17",
+    "@ai-sdk/openai": "^2.0.89",
+    "@ai-sdk/xai": "^1.2.18",
     "@nullshot/agent": "workspace:*",
     "ai": "catalog:",
-    "hono": "^4.7.11",
+    "hono": "^4.11.9",
     "solitary-bar-c2b2": "github:null-shot/typescript-mcp-template"
   },
   "devDependencies": {
     "@nullshot/cli": "workspace:*",
     "@types/node": "catalog:",
-    "concurrently": "^9.1.2",
+    "concurrently": "^9.2.1",
     "typescript": "catalog:",
     "wrangler": "catalog:"
   },

@@ -111,9 +111,9 @@ export interface MiddlewareService extends Service, LanguageModelMiddleware {
 	 * Transform tools in streamText parameters
 	 * @param tools The original tools to transform
 	 * @param sessionId The session ID of the current request
-	 * @returns The transformed tools
+	 * @returns The transformed tools, or undefined if no tools available
 	 */
-	transformStreamTextTools?(tools?: ToolSet): ToolSet;
+	transformStreamTextTools?(tools?: ToolSet): ToolSet | undefined;
 }
 
 export function isMiddlewareService(service: Service): service is MiddlewareService {

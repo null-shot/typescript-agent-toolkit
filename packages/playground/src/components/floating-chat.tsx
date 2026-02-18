@@ -3,12 +3,12 @@
 import React from "react";
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgentSelector } from "@/components/agent-selector";
 import { cn } from "@/lib/utils";
-import { type Agent, DEFAULT_AGENT, getDefaultAgent } from "@/lib/config";
-import { type UIMessage } from "ai";
+import { type Agent, getDefaultAgent } from "@/lib/config";
+import { type UIMessage, type TextUIPart } from "ai";
 import { useAgentHealth } from "@/hooks/use-agent-health";
 import { useAgentContext } from "@/lib/agent-context";
 import {
@@ -23,9 +23,13 @@ import {
   saveOfflineMessage,
   getOfflineMessages,
   isOnline,
-  createOfflineResponseMessage,
   createOfflineNotificationMessage,
 } from "@/lib/offline-utils";
+
+// Type guard to narrow UIMessagePart to TextUIPart (TypeScript can't narrow through .find()/.filter())
+function isTextPart(part: UIMessage["parts"][0]): part is TextUIPart {
+  return part.type === "text";
+}
 
 // Type guard to check if a part has tool-related properties
 function isToolUIPart(
@@ -85,7 +89,7 @@ export function FloatingChatButton() {
         onClick={() => setIsOpen(true)}
         size="lg"
         variant="default"
-        className="px-8 py-4 text-lg font-semibold hover:scale-105 transition-transform bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 shadow-lg hover:shadow-xl"
+        className="px-8 py-4 text-lg font-semibold hover:scale-105 transition-transform bg-[#00d4aa] hover:bg-[#14b8a6] text-black border-none shadow-lg hover:shadow-xl"
       >
         <MessageCircle className="h-5 w-5 mr-2" />
         Start Chat
@@ -122,8 +126,6 @@ export function FloatingChat({
   // Monitor selected agent health
   const {
     health: agentHealth,
-    isLoading: isHealthLoading,
-    error: healthError,
     checkHealth,
   } = useAgentHealth(selectedAgent, 30000); // Check every 30 seconds
 
@@ -175,6 +177,7 @@ export function FloatingChat({
         };
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally narrowed to avoid infinite re-render loops
   }, [agentHealth?.health?.isOnline, agentHealth?.health?.lastChecked, selectedAgent?.id]);
 
   // Force health check when chat opens
@@ -238,28 +241,44 @@ export function FloatingChat({
     setMessages([]); // Clear messages when agent changes
   };
 
+  // Helper to handle offline/unavailable scenarios: saves message and adds offline response to chat
+  const handleOfflineMessage = useCallback(
+    async (messageText: string, responseText: string, toastError?: unknown, toastTitle?: string) => {
+      await saveOfflineMessage(selectedAgent, messageText);
+
+      const userMessage: UIMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        parts: [{ type: "text", text: messageText }],
+      };
+
+      const offlineResponse: UIMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        parts: [{ type: "text", text: responseText }],
+      };
+
+      setMessages((prev) => [...prev, userMessage, offlineResponse]);
+      setInput("");
+
+      if (toastError) {
+        showErrorToast(toastError, toastTitle || "Error");
+      }
+    },
+    [selectedAgent],
+  );
+
   const sendMessage = useCallback(
     async (messageText: string) => {
       if (!messageText.trim()) return;
+      const trimmedText = messageText.trim();
 
       // Handle offline mode
       if (isOffline || !isOnline()) {
-        // Save message for later sending
-        await saveOfflineMessage(selectedAgent, messageText.trim());
-
-        // Add user message and offline response to chat
-        const userMessage: UIMessage = {
-          id: crypto.randomUUID(),
-          role: "user",
-          parts: [{ type: "text", text: messageText.trim() }],
-        };
-
-        setMessages((prev) => [
-          ...prev,
-          userMessage,
-          createOfflineResponseMessage(messageText.trim()),
-        ]);
-        setInput("");
+        await handleOfflineMessage(
+          trimmedText,
+          "You are currently offline. Your message has been saved and will be sent when you're back online.",
+        );
         return;
       }
 
@@ -267,30 +286,9 @@ export function FloatingChat({
       try {
         const updatedAgent = await checkHealth(true);
         if (!updatedAgent.health?.isOnline) {
-          // Save message for later sending
-          await saveOfflineMessage(selectedAgent, messageText.trim());
-
-          // Add user message and offline response to chat
-          const userMessage: UIMessage = {
-            id: crypto.randomUUID(),
-            role: "user",
-            parts: [{ type: "text", text: messageText.trim() }],
-          };
-
-          const offlineResponse: UIMessage = {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            parts: [
-              {
-                type: "text",
-                text: `The agent ${updatedAgent.name} is currently offline. Your message has been saved and will be sent when the agent is back online.`,
-              },
-            ],
-          };
-
-          setMessages((prev) => [...prev, userMessage, offlineResponse]);
-          setInput("");
-          showErrorToast(
+          await handleOfflineMessage(
+            trimmedText,
+            `The agent ${updatedAgent.name} is currently offline. Your message has been saved and will be sent when the agent is back online.`,
             new AgentOfflineError(
               `Agent ${updatedAgent.name} is offline: ${updatedAgent.health?.error || "Unknown error"}`,
             ),
@@ -299,30 +297,12 @@ export function FloatingChat({
           return;
         }
       } catch (err) {
-        // Save message for later sending
-        await saveOfflineMessage(selectedAgent, messageText.trim());
-
-        // Add user message and offline response to chat
-        const userMessage: UIMessage = {
-          id: crypto.randomUUID(),
-          role: "user",
-          parts: [{ type: "text", text: messageText.trim() }],
-        };
-
-        const offlineResponse: UIMessage = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          parts: [
-            {
-              type: "text",
-              text: "There was an issue checking the agent status. Your message has been saved and will be sent when the connection is restored.",
-            },
-          ],
-        };
-
-        setMessages((prev) => [...prev, userMessage, offlineResponse]);
-        setInput("");
-        showErrorToast(err, "Health Check Failed");
+        await handleOfflineMessage(
+          trimmedText,
+          "There was an issue checking the agent status. Your message has been saved and will be sent when the connection is restored.",
+          err,
+          "Health Check Failed",
+        );
         return;
       }
 
@@ -330,7 +310,7 @@ export function FloatingChat({
       const userMessage: UIMessage = {
         id: crypto.randomUUID(),
         role: "user",
-        parts: [{ type: "text", text: messageText.trim() }],
+        parts: [{ type: "text", text: trimmedText }],
       };
 
       setMessages((prev) => [...prev, userMessage]);
@@ -342,10 +322,12 @@ export function FloatingChat({
       const assistantMessageId = crypto.randomUUID();
 
       try {
-        console.log("[FloatingChat] Sending message to agent:", {
-          url: `${selectedAgent.url}/agent/chat`,
-          messageText,
-          agentName: selectedAgent.name,
+        // Build message history using functional state to avoid stale closure
+        const messageHistory = await new Promise<UIMessage[]>((resolve) => {
+          setMessages((prev) => {
+            resolve(prev);
+            return prev;
+          });
         });
 
         const response = await fetch(`${selectedAgent.url}/agent/chat`, {
@@ -354,9 +336,9 @@ export function FloatingChat({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            messages: [...messages, userMessage]
+            messages: messageHistory
               .map((msg) => {
-                const textContent = msg.parts?.find((part) => part.type === "text")?.text || "";
+                const textContent = msg.parts?.find(isTextPart)?.text || "";
                 return {
                   role: msg.role,
                   content: textContent,
@@ -386,7 +368,7 @@ export function FloatingChat({
                 errorDetails = errorText;
               }
             }
-          } catch (e) {
+          } catch {
             // Ignore errors when reading error response
           }
           
@@ -466,7 +448,7 @@ export function FloatingChat({
                 } else if (parsed.text) {
                   accumulatedText += parsed.text;
                 }
-              } catch (e) {
+              } catch {
                 // If parsing fails, treat as plain text
                 accumulatedText += line.slice(2);
               }
@@ -483,7 +465,7 @@ export function FloatingChat({
                 } else if (typeof parsed === "string") {
                   accumulatedText += parsed;
                 }
-              } catch (e) {
+              } catch {
                 // If parsing fails, skip this line
                 console.warn("Failed to parse SSE data:", line);
               }
@@ -515,9 +497,6 @@ export function FloatingChat({
               : msg,
           ),
         );
-
-        // Show success message for completed response
-        showSuccessToast("Message sent successfully");
       } catch (err) {
         console.error("Error sending message:", err);
 
@@ -550,7 +529,7 @@ export function FloatingChat({
         setIsLoading(false);
       }
     },
-    [selectedAgent, messages, checkHealth, isOffline],
+    [selectedAgent, checkHealth, isOffline, handleOfflineMessage],
   );
 
   const handleFormSubmit = (
@@ -578,9 +557,7 @@ export function FloatingChat({
     setError(null);
     const lastUserMessage = messages.filter((msg) => msg.role === "user").pop();
     if (lastUserMessage) {
-      const lastText = lastUserMessage.parts?.find(
-        (part) => part.type === "text",
-      )?.text;
+      const lastText = lastUserMessage.parts?.find(isTextPart)?.text;
       if (lastText) {
         // Remove the last assistant message if it exists and retry
         setMessages((prev) => {
@@ -608,21 +585,21 @@ export function FloatingChat({
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.8, opacity: 0, y: 20 }}
           className={cn(
-            // Базовые стили позиционирования - одинаковые отступы от границ во всех режимах
+            // Base positioning styles — equal padding from edges in all modes
             "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] z-50",
-            // Мобильный режим (до 1024px): без ограничения max-width
+            // Mobile mode (below 1024px): no max-width constraint
             "h-[90vh]",
-            // Большой экран (от 1024px): фиксированная ширина (уменьшена для более компактного вида)
+            // Large screen (1024px+): fixed width for a compact look
             "lg:w-[515px] lg:h-[800px]",
-            // На мобильных и средних экранах (до 1024px) добавляем отступ снизу 60px, чтобы не перекрывало Next.js Dev Tools
-            // Также убираем центрирование по вертикали и ограничиваем высоту
+            // On mobile/medium screens (below 1024px): bottom offset to avoid overlapping Next.js Dev Tools,
+            // disable vertical centering and constrain height
             "max-lg:top-auto max-lg:bottom-[60px] max-lg:translate-y-0 max-lg:h-[calc(100vh-110px)]",
             className,
           )}
         >
           <div className="chat-container rounded-xl h-full flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-t-xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(255,255,255,0.08)] bg-[#0a0a0a] rounded-t-xl">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <AgentSelector
                   selectedAgent={selectedAgent}
@@ -636,7 +613,7 @@ export function FloatingChat({
                   variant="ghost"
                   size="icon"
                   onClick={onClose}
-                  className="h-8 w-8 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  className="h-8 w-8 text-[#a0a0a0] hover:text-white"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -678,9 +655,9 @@ export function FloatingChat({
                         )}>
                           {isUser ? (
                             <div className="rounded-lg px-4 py-3 text-sm leading-relaxed message-user rounded-br-sm">
-                              <div className="whitespace-pre-wrap break-words text-white">
+                              <div className="whitespace-pre-wrap break-words text-black">
                                 {message.parts
-                                  ?.filter((part) => part.type === "text")
+                                  ?.filter(isTextPart)
                                   ?.map((part, index) => (
                                     <span key={index}>{part.text}</span>
                                   ))}
@@ -694,7 +671,7 @@ export function FloatingChat({
                                     return (
                                       <div 
                                         key={index}
-                                        className="rounded-lg px-4 py-3 text-sm leading-relaxed bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-bl-sm"
+                                        className="rounded-lg px-4 py-3 text-sm leading-relaxed bg-[#1e1e1e] border border-[rgba(255,255,255,0.05)] rounded-bl-sm text-[#d0d0d0]"
                                       >
                                         <Response 
                                           className="text-left break-words prose prose-sm dark:prose-invert max-w-none"
@@ -757,8 +734,28 @@ export function FloatingChat({
               <ConversationScrollButton />
             </Conversation>
 
+            {/* Error state with retry */}
+            {error && (
+              <div className="px-4 py-2.5 bg-[rgba(255,100,80,0.08)] border-t border-[rgba(255,100,80,0.15)]">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-[#ff6450] truncate">
+                    {error.message}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={reload}
+                    className="shrink-0 h-7 px-2.5 text-xs text-[#ff6450] hover:text-white hover:bg-[rgba(255,100,80,0.15)]"
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1.5" />
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Chat Input using AI Elements PromptInput */}
-            <div className="px-6 py-5 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-b-xl">
+            <div className="px-6 py-5 border-t border-[rgba(255,255,255,0.08)] bg-[#1a1a1a] rounded-b-xl">
               <PromptInput onSubmit={handleFormSubmit} className="gap-0">
                 <PromptInputBody className="gap-2">
                   <PromptInputAttachments>

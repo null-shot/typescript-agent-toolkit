@@ -27,9 +27,42 @@
 	"kv_namespaces": [
 		{
 			"binding": "EXAMPLE_KV",
-			"id": "d4214750a07741e2a476db8337966773",
+			"id": "<YOUR_KV_NAMESPACE_ID>",
+			"preview_id": "<YOUR_KV_PREVIEW_ID>",
 		},
 	],
+	"vars": {
+		"ENVIRONMENT": "development",
+		"LOG_LEVEL": "debug",
+	},
+	"env": {
+		"staging": {
+			"kv_namespaces": [
+				{
+					"binding": "EXAMPLE_KV",
+					"id": "<YOUR_KV_NAMESPACE_ID>",
+					"preview_id": "<YOUR_KV_PREVIEW_ID>",
+				},
+			],
+			"vars": {
+				"ENVIRONMENT": "staging",
+				"LOG_LEVEL": "info",
+			},
+		},
+		"production": {
+			"kv_namespaces": [
+				{
+					"binding": "EXAMPLE_KV",
+					"id": "<YOUR_KV_NAMESPACE_ID>",
+					"preview_id": "<YOUR_KV_PREVIEW_ID>",
+				},
+			],
+			"vars": {
+				"ENVIRONMENT": "production",
+				"LOG_LEVEL": "warn",
+			},
+		},
+	},
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -41,11 +74,6 @@
 	 * databases, object storage, AI inference, real-time communication and more.
 	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
 	 */
-	/**
-	 * Environment Variables
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-	 */
-	// "vars": { "MY_VARIABLE": "production_value" },
 	/**
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/

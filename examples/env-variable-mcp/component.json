@@ -1,0 +1,22 @@
+{
+	"name": "env-variable-mcp",
+	"type": "mcp",
+	"description": "Environment variable demo (greeting tool)",
+	"exports": {
+		"className": "EnvVariableMcpServer",
+		"binding": "ENV_VARIABLE_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod"
+	],
+	"routes": {
+		"pattern": "/mcp/env-variable/*",
+		"method": "all"
+	},
+	"tools": [
+		"greeting"
+	],
+	"tier": 1
+}

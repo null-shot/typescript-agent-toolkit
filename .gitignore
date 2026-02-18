@@ -1,4 +1,64 @@
+# ═══════════════════════════════════════════════════════════
+# SECURITY — API keys, secrets, credentials
+# ═══════════════════════════════════════════════════════════
+
+# Cloudflare Workers local secrets
+.dev.vars
+.dev.varsy
+**/.dev.vars
+**/.dev.varsy
+
+# Environment files (all variations)
+.env
+.env.*
+!.env.example
+!.env.*.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+*.cer
+*.der
+
+# Credential files
+*credentials*.json
+*serviceAccountKey*.json
+*service-account*.json
+gcloud-credentials.json
+firebase-adminsdk*.json
+
+# Cloud provider config with potential secrets
+.cloudflare/
+.aws/
+.gcp/
+
+# Auth tokens / session files
+*.token
+.netrc
+.npmrc
+!.npmrc.example
+
+# Terraform state (may contain secrets)
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Docker env files
+docker-compose.override.yml
+.docker-env
+
+# ═══════════════════════════════════════════════════════════
 # Dependencies
+# ═══════════════════════════════════════════════════════════
 node_modules/
 .yarn/*
 !.yarn/patches
@@ -8,23 +68,24 @@ node_modules/
 !.yarn/versions
 .pnp.*
 
+# ═══════════════════════════════════════════════════════════
 # TypeScript
+# ═══════════════════════════════════════════════════════════
 *.tsbuildinfo
 dist/
 build/
 lib/
 !/**/src/**/lib
 
+# ═══════════════════════════════════════════════════════════
 # Cloudflare Workers
+# ═══════════════════════════════════════════════════════════
 .wrangler/
-.dev.vars
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+**/.wrangler/
 
+# ═══════════════════════════════════════════════════════════
 # IDE & Editors
+# ═══════════════════════════════════════════════════════════
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -38,33 +99,50 @@ lib/
 *.sw?
 .history/
 
+# ═══════════════════════════════════════════════════════════
 # Testing
+# ═══════════════════════════════════════════════════════════
 coverage/
 .nyc_output/
 
+# ═══════════════════════════════════════════════════════════
 # Debug logs
+# ═══════════════════════════════════════════════════════════
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 debug.log
 *.log
 
-# Production
+# ═══════════════════════════════════════════════════════════
+# Production / Build
+# ═══════════════════════════════════════════════════════════
 /build
 .next/
 out/
 .vercel
 
+# ═══════════════════════════════════════════════════════════
+# Data & Databases
+# ═══════════════════════════════════════════════════════════
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# ═══════════════════════════════════════════════════════════
 # Misc
+# ═══════════════════════════════════════════════════════════
 .DS_Store
-*.pem
 .cache/
 temp/
 tmp/
-.turbo 
-
-data/
-*.db
+.turbo
 
 # Bug fix reports (temporary documentation for PRs)
 BUGFIX_REPORT.md
+
+# Build artifacts & local stores
+.nullshot-bundle/
+.pnpm-store/

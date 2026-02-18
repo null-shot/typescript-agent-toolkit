@@ -1,0 +1,31 @@
+{
+	"name": "analytics-mcp",
+	"type": "mcp",
+	"description": "Analytics Engine + D1 metrics tracking",
+	"exports": {
+		"className": "AnalyticsMcpServer",
+		"binding": "ANALYTICS_MCP"
+	},
+	"dependencies": [
+		"@nullshot/mcp",
+		"@modelcontextprotocol/sdk",
+		"zod"
+	],
+	"routes": {
+		"pattern": "/mcp/analytics/*",
+		"method": "all"
+	},
+	"tools": [
+		"track_metric",
+		"track_batch_metrics",
+		"query_analytics",
+		"get_metrics_summary",
+		"get_time_series",
+		"analyze_trends",
+		"list_datasets",
+		"get_recent_data"
+	],
+	"tier": 3,
+	"disabled": true,
+	"disabledReason": "Requires Analytics Engine + D1 database"
+}

@@ -46,8 +46,119 @@ The above will boostrap a serverless cloudflare compatible MCP Server with the f
 - `pnpm run dev`: Runs both the MCP Inspector (port 6274) and Cloudflare Worker (port 8787) concurrently
 - `pnpm start`: Runs only the Cloudflare Worker (port 8787)
 - `pnpm test`: Runs tests with Vitest
-- `pnpm run deploy`: Deploys your MCP to Cloudflare Workers
+- `pnpm run deploy`: Deploys your MCP to Cloudflare Workers (default environment)
+- `pnpm run deploy:dev`: Deploys to development environment
+- `pnpm run deploy:staging`: Deploys to staging environment
+- `pnpm run deploy:prod`: Deploys to production environment
+- `pnpm run dev:staging`: Runs local dev server with staging configuration
+- `pnpm run dev:prod`: Runs local dev server with production configuration
 - `pnpm run cf-typegen`: Generates TypeScript types for Cloudflare Workers (run this everytime you add new changes to wrangler.jsonc)
+- `pnpm run kv:list`: List all KV namespaces
+- `pnpm run kv:create`: Create production KV namespace `kv_namespace_tet`
+- `pnpm run kv:create:preview`: Create preview KV namespace for local development
+
+## Deployment Environments
+
+This project is configured with multiple deployment environments for testing and production:
+
+### Environment Configuration
+
+The `wrangler.jsonc` file includes three environments:
+
+1. **Development** (default): Local development with debug logging
+2. **Staging**: Pre-production testing environment
+3. **Production**: Production environment with optimized settings
+
+### Создание KV Namespace на Cloudflare
+
+Если namespace еще не создан, выполните следующие команды:
+
+```bash
+# Создать production namespace
+pnpm run kv:create
+
+# Создать preview namespace (для локальной разработки)
+pnpm run kv:create:preview
+
+# Просмотреть список всех namespaces
+pnpm run kv:list
+```
+
+Или используйте скрипт:
+```bash
+./setup-kv-namespace.sh
+```
+
+После создания namespace, обновите `wrangler.jsonc` с полученными ID:
+- `id` - для production namespace
+- `preview_id` - для preview namespace (локальная разработка)
+
+**Текущая конфигурация:**
+- Namespace: `kv_namespace_tet`
+- Production ID: `<YOUR_KV_NAMESPACE_ID>` (set after running `wrangler kv namespace create`)
+
+### KV Namespace Configuration
+
+Each environment can use different KV namespace IDs. Update the `kv_namespaces` section in `wrangler.jsonc` for each environment:
+
+```jsonc
+"env": {
+  "staging": {
+    "kv_namespaces": [
+      {
+        "binding": "EXAMPLE_KV",
+        "id": "your-staging-kv-namespace-id",
+        "preview_id": "your-staging-preview-kv-namespace-id"
+      }
+    ]
+  },
+  "production": {
+    "kv_namespaces": [
+      {
+        "binding": "EXAMPLE_KV",
+        "id": "your-production-kv-namespace-id",
+        "preview_id": "your-production-preview-kv-namespace-id"
+      }
+    ]
+  }
+}
+```
+
+### Local Development
+
+Create a `.dev.vars` file for local development variables:
+
+```bash
+# .dev.vars
+ENVIRONMENT=development
+LOG_LEVEL=debug
+```
+
+### Deploying to Different Environments
+
+```bash
+# Deploy to development (default)
+pnpm run deploy
+
+# Deploy to staging
+pnpm run deploy:staging
+
+# Deploy to production
+pnpm run deploy:prod
+
+# Test locally with staging config
+pnpm run dev:staging
+
+# Test locally with production config
+pnpm run dev:prod
+```
+
+### Environment Variables
+
+Each environment has its own configuration:
+- **Development**: `ENVIRONMENT=development`, `LOG_LEVEL=debug`
+- **Staging**: `ENVIRONMENT=staging`, `LOG_LEVEL=info`
+- **Production**: `ENVIRONMENT=production`, `LOG_LEVEL=warn`
 
 ## Usage Overview
 

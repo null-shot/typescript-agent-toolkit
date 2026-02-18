@@ -46,15 +46,15 @@
 	},
 	"homepage": "https://xavalabs.com",
 	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "^0.8.43",
+		"@cloudflare/vitest-pool-workers": "^0.8.71",
 		"@semantic-release/git": "^10.0.1",
-		"semantic-release": "^23.0.0",
-		"typescript": "^5.8.3",
-		"vitest": "3.0.x",
-		"wrangler": "^4.9.1"
+		"semantic-release": "^23.1.1",
+		"typescript": "^5.9.3",
+		"vitest": "3.0.9",
+		"wrangler": "^4.65.0"
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "catalog:",
-		"hono": "^4.7.6"
+		"hono": "^4.11.9"
 	}
 }

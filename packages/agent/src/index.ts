@@ -15,3 +15,9 @@ export * from './aisdk';
 
 // Export services
 export * from './services';
+
+// Export playground UI components (for single-worker architecture)
+export * from './playground';
+
+// Export authentication module
+export * from './auth';

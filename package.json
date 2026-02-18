@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    ".nullshot-bundle"
   ],
   "scripts": {
     "build": "pnpm -r run build",
     "build:packages": "pnpm --filter './packages/*' run build",
+    "build:packages:no-playground": "pnpm --filter './packages/*' --filter='!@nullshot/playground' run build",
     "build:examples": "pnpm --filter './examples/*' run build",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
@@ -18,11 +20,23 @@
     "version": "changeset version",
     "publish": "changeset publish",
     "release": "changeset publish",
-    "prepare": "husky"
+    "prepare": "husky",
+    "deploy": "pnpm --filter single-worker-example run deploy:auto",
+    "deploy:single-worker": "pnpm --filter single-worker-example run deploy:auto",
+    "deploy:single-worker:manual": "pnpm --filter single-worker-example run deploy",
+    "deploy:single-worker:staging": "pnpm --filter single-worker-example run deploy:staging",
+    "deploy:single-worker:prod": "pnpm --filter single-worker-example run deploy:prod",
+    "deploy:single-worker:openai": "pnpm --filter single-worker-example run deploy:openai",
+    "deploy:single-worker:deepseek": "pnpm --filter single-worker-example run deploy:deepseek",
+    "deploy:kv-mcp": "pnpm --filter kv-mcp run deploy",
+    "deploy:kv-mcp:staging": "pnpm --filter kv-mcp run deploy:staging",
+    "deploy:kv-mcp:prod": "pnpm --filter kv-mcp run deploy:prod",
+    "deploy:wizard": "pnpm --filter @nullshot/cli run start deploy",
+    "wizard": "pnpm --filter @nullshot/cli run start deploy"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.5",
-    "@modelcontextprotocol/sdk": "^1.17.2",
+    "@changesets/cli": "^2.29.8",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "husky": "^9.1.7"
   },
   "packageManager": "pnpm@9.12.3+sha1.4fb96925d434c491285182acf29803bb9aa2e6e5"
