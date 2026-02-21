@@ -19,7 +19,6 @@ import {
 } from "../utils/bot-chats-storage";
 import { escapeHtml, buildPostLink, formatError } from "../utils/helpers";
 import {
-  IMAGE_POST_PROMPT,
   parseFormatHints,
   getPromptForFormat,
 } from "../utils/prompts";
@@ -27,6 +26,7 @@ import { parseContentBlock } from "../types/content";
 import { publishContent } from "../utils/content-publisher";
 import { loggers } from "../utils/logger";
 import { sendAgentMessage } from "../utils/agent-client";
+import { getKnowledgeBasePrompt } from "../utils/knowledge-base";
 import {
   getPendingPost,
   setPendingPost,
@@ -401,9 +401,17 @@ export function setupChannelHandlers(bot: Bot, env: Env): void {
         const imagesEnabled =
           (await env.SESSIONS?.get("setting:image_with_posts")) !== "false";
         const prompt = getPromptForFormat(format, !!env.AI, imagesEnabled);
-        const rawText = await generateWithAI(env, prompt + cleanTopic);
+        const kbPrompt = await getKnowledgeBasePrompt(env.SESSIONS);
+        const systemPrompt = kbPrompt + "\n\n" + prompt + cleanTopic;
+        const rawText = await generateWithAI(
+          env,
+          systemPrompt,
+          `Write a post about: ${cleanTopic}`,
+        );
         if (!rawText) {
-          await ctx.reply("❌ Generation failed. Try again.");
+          await ctx.reply(
+            "❌ Generation failed (both Workers AI and Agent returned empty). Check worker logs. Try again.",
+          );
           return;
         }
         await publishToChat(ctx, env, target, rawText);
@@ -681,7 +689,13 @@ export function setupChannelHandlers(bot: Bot, env: Env): void {
           !!env.AI,
           regenImagesEnabled,
         );
-        const text = await generateWithAI(env, regenPrompt + regenTopic);
+        const regenKb = await getKnowledgeBasePrompt(env.SESSIONS);
+        const regenSystem = regenKb + "\n\n" + regenPrompt + regenTopic;
+        const text = await generateWithAI(
+          env,
+          regenSystem,
+          `Write a post about: ${regenTopic}`,
+        );
         if (!text) {
           await ctx.editMessageText("❌ Regeneration failed.");
           return;
@@ -823,10 +837,18 @@ async function generateAndPostToTargets(
       !!env.AI,
       multiImagesEnabled,
     );
-    const rawText = await generateWithAI(env, multiPrompt + multiTopic);
+    const kbPrompt = await getKnowledgeBasePrompt(env.SESSIONS);
+    const systemPrompt = kbPrompt + "\n\n" + multiPrompt + multiTopic;
+    const rawText = await generateWithAI(
+      env,
+      systemPrompt,
+      `Write a post about: ${multiTopic}`,
+    );
 
     if (!rawText) {
-      await ctx.reply("❌ Generation failed. Try again.");
+      await ctx.reply(
+        "❌ Generation failed (both Workers AI and Agent returned empty). Check worker logs. Try again.",
+      );
       return;
     }
 
@@ -1111,61 +1133,71 @@ async function publishToChat(
  */
 async function generateWithAI(
   env: Env,
-  prompt: string,
+  systemPrompt: string,
+  userMessage: string,
 ): Promise<string | null> {
-  // #region agent log
-  console.log(
-    "[DEBUG:generateWithAI:start]",
-    JSON.stringify({
-      hasAgentService: !!env.AGENT_SERVICE,
-      agentUrl: env.AGENT_URL?.substring(0, 80),
-      promptLength: prompt.length,
-      promptPreview: prompt.substring(0, 150),
-      hypothesisId: "A,D,E",
-    }),
-  );
-  // #endregion
-  try {
-    const agentUrl =
-      env.AGENT_URL || "https://your-agent.your-subdomain.workers.dev";
-    const sessionId = `gen_${Date.now()}`;
+  const messages = [
+    { role: "system" as const, content: systemPrompt },
+    { role: "user" as const, content: userMessage },
+  ];
 
-    const messages = [{ role: "user" as const, content: prompt }];
+  let content: string | undefined;
+  const errors: string[] = [];
 
-    const fullText = await sendAgentMessage(
-      agentUrl,
-      sessionId,
-      messages,
-      env.AGENT_SERVICE,
-    );
-
-    // #region agent log
-    console.log(
-      "[DEBUG:generateWithAI:result]",
-      JSON.stringify({
-        sessionId,
-        fullTextLength: fullText.length,
-        trimmedLength: fullText.trim().length,
-        isEmpty: !fullText.trim(),
-        preview: fullText.substring(0, 200),
-        hypothesisId: "B,C",
-      }),
-    );
-    // #endregion
-    return fullText.trim() || null;
-  } catch (error) {
-    // #region agent log
-    console.log(
-      "[DEBUG:generateWithAI:error]",
-      JSON.stringify({
-        error: error instanceof Error ? error.message : String(error),
-        stack:
-          error instanceof Error ? error.stack?.substring(0, 300) : undefined,
-        hypothesisId: "A,D,E",
-      }),
-    );
-    // #endregion
-    log.error("AI generation error", error);
-    return null;
+  // Try Workers AI FIRST — faster, no DO overhead, ideal for post generation
+  if (env.AI) {
+    try {
+      console.log("[generateWithAI] trying Workers AI (primary)");
+      const t0 = Date.now();
+      const result = (await env.AI.run(
+        "@cf/meta/llama-3.3-70b-instruct-fp8-fast" as keyof AiModels,
+        { messages } as any,
+      )) as { response?: string };
+      const dur = Date.now() - t0;
+      console.log("[generateWithAI] Workers AI ok", JSON.stringify({
+        duration: dur, responseLen: result.response?.length ?? 0,
+      }));
+      content = result.response?.trim() || undefined;
+    } catch (aiError) {
+      const msg = aiError instanceof Error ? aiError.message : String(aiError);
+      console.error("[generateWithAI] Workers AI FAILED:", msg);
+      errors.push(`WorkersAI: ${msg}`);
+    }
   }
+
+  // Fallback to Agent (via AGENT_SERVICE or AGENT_URL)
+  if (!content) {
+    const agentUrl = env.AGENT_URL || "";
+    const useServiceBinding = !!env.AGENT_SERVICE;
+    const hasAgent = !!agentUrl || useServiceBinding;
+
+    if (hasAgent) {
+      try {
+        const sessionId = `gen_${Date.now()}`;
+        console.log("[generateWithAI] trying Agent (fallback)");
+        const t0 = Date.now();
+        const fullText = await sendAgentMessage(
+          agentUrl,
+          sessionId,
+          messages,
+          useServiceBinding ? env.AGENT_SERVICE : undefined,
+        );
+        const dur = Date.now() - t0;
+        console.log("[generateWithAI] agent ok", JSON.stringify({
+          duration: dur, responseLen: fullText.length,
+        }));
+        content = fullText.trim() || undefined;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error("[generateWithAI] Agent FAILED:", msg);
+        errors.push(`Agent: ${msg}`);
+      }
+    }
+  }
+
+  if (!content && errors.length > 0) {
+    console.error("[generateWithAI] ALL FAILED:", errors.join(" | "));
+  }
+
+  return content || null;
 }

@@ -60,6 +60,28 @@
 			"name": "VOICE_MCP",
 			"class_name": "VoiceMcpServer",
 		},
+		{
+			"name": "KV_MCP",
+			"class_name": "KvMcpServer",
+		},
+		{
+			"name": "ANALYTICS_MCP",
+			"class_name": "AnalyticsMcpServer",
+		},
+		{
+			"name": "VECTORIZE_MCP",
+			"class_name": "VectorizeMcpServer",
+		},
+		{
+			"name": "BROWSER_MCP",
+			"class_name": "BrowserMcpServer",
+		},
+		// EMAIL_MCP — inactive until custom domain + Cloudflare Email Routing is set up
+		// Uncomment when domain is verified and email routing enabled:
+		// {
+		// 	"name": "EMAIL_MCP",
+		// 	"class_name": "EmailMcpServer",
+		// },
 	],
 },
 	/**
@@ -112,6 +134,16 @@
 			"VoiceMcpServer"
 		],
 	},
+	{
+		"tag": "do-AllNewMcps",
+		"new_sqlite_classes": [
+			"KvMcpServer",
+			"AnalyticsMcpServer",
+			"VectorizeMcpServer",
+			"BrowserMcpServer",
+			"EmailMcpServer"
+		],
+	},
 ],
 	/**
    * Workers AI binding — enables on-device AI inference (embeddings, LLM, image gen).
@@ -129,18 +161,46 @@
 			"binding": "CHAT_MEMORY",
 			"index_name": "chat-memory",
 		},
+		{
+			"binding": "VECTORIZE_INDEX",
+			"index_name": "single-worker-semantic-search",
+		},
 	],
 	/**
    * KV Namespaces
-   * Used by Telegram Bot Agent for sessions, channels, moderation, etc.
+   * SESSIONS: Telegram Bot Agent sessions, channels, moderation
+   * EXAMPLE_KV: KvMcpServer prime number cache
    */
 	"kv_namespaces": [
 		{
 			"binding": "SESSIONS",
-			"id": "<YOUR_KV_NAMESPACE_ID>",
-			"preview_id": "<YOUR_KV_PREVIEW_ID>",
+			"id": "5b433935177841a2b6100f53e31fc8cc",
+		},
+		{
+			"binding": "EXAMPLE_KV",
+			"id": "b16679f2071e4c7c81e5da17c0853f7d",
 		},
 	],
+	/**
+   * Analytics Engine (for AnalyticsMcpServer)
+   */
+	"analytics_engine_datasets": [
+		{
+			"binding": "ANALYTICS",
+			"dataset": "single_worker_analytics",
+		},
+	],
+	// Browser Rendering (free tier: 2 concurrent sessions)
+	"browser": { "binding": "MYBROWSER" },
+	// R2 disabled (require paid add-on)
+	// "r2_buckets": [{ "binding": "CACHE_BUCKET", "bucket_name": "single-worker-browser-cache" }],
+	// Email (for EmailMcpServer) — inactive until domain + Email Routing enabled
+	// Uncomment when ready:
+	// "send_email": [
+	// 	{
+	// 		"name": "SEND_EMAIL",
+	// 	},
+	// ],
 	/**
    * Cron Triggers
    * Used by Telegram Bot Agent for processing scheduled/recurring posts.

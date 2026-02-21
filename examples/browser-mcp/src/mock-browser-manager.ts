@@ -11,18 +11,25 @@ export class MockBrowserManager {
   }
 
   async createSession(sessionId: string, options: NavigationOptions): Promise<any> {
-    // Create mock page object
+    let currentUrl = options.url;
+
+    const mockKeyboard = {
+      press: (_key: string) => Promise.resolve(),
+      type: (_text: string) => Promise.resolve(),
+      down: (_key: string) => Promise.resolve(),
+      up: (_key: string) => Promise.resolve(),
+    };
+
     const mockPage = {
-      url: () => options.url,
+      url: () => currentUrl,
       title: () => "Mock Page Title",
-      screenshot: () => Promise.resolve("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="), // 1x1 transparent PNG
+      screenshot: () => Promise.resolve("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="),
       $: () => Promise.resolve({
         screenshot: () => Promise.resolve("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
       }),
       $$eval: () => Promise.resolve(["Mock text 1", "Mock text 2"]),
       $eval: () => Promise.resolve("Mock extracted text"),
       evaluate: (code: any, ...args: any[]) => {
-        // Handle string code (for simple evaluations)
         if (typeof code === 'string') {
           if (code.includes && code.includes('document.title')) return Promise.resolve('Mock Page Title');
           if (code.includes && code.includes('links')) return Promise.resolve([
@@ -32,10 +39,29 @@ export class MockBrowserManager {
           return Promise.resolve({ mockResult: true });
         }
 
-        // Handle function evaluation (what the real browser expects)
-        // For link extraction, return mock links
+        if (typeof code === 'function') {
+          try {
+            const result = code(...args);
+            return Promise.resolve(result);
+          } catch {
+            return Promise.resolve({
+              url: currentUrl,
+              title: 'Mock Page Title',
+              viewport: { width: 1280, height: 720 },
+              scroll: { x: 0, y: 0, maxX: 0, maxY: 2000 },
+              forms: 1,
+              inputs: [
+                { tag: 'input', type: 'email', name: 'email', id: 'email', placeholder: 'Email', value: '', required: true, selector: '#email' },
+                { tag: 'input', type: 'text', name: 'name', id: 'name', placeholder: 'Name', value: '', required: true, selector: '#name' },
+              ],
+              buttons: [
+                { tag: 'button', text: 'Register', type: 'submit', id: 'register-btn', selector: '#register-btn' },
+              ],
+            });
+          }
+        }
+
         if (args && args.length >= 4) {
-          const [filter, internal, external, currentDomain] = args;
           return Promise.resolve([
             { url: 'https://example.com/link1', text: 'Link 1', internal: true, domain: 'example.com' },
             { url: 'https://example.com/link2', text: 'Link 2', internal: true, domain: 'example.com' }
@@ -45,14 +71,19 @@ export class MockBrowserManager {
         return Promise.resolve({ mockResult: true });
       },
       waitForSelector: () => Promise.resolve(),
+      waitForNavigation: () => Promise.resolve(),
       waitForLoadState: () => Promise.resolve(),
-      waitForTimeout: (ms: number) => new Promise(resolve => setTimeout(resolve, Math.min(ms, 100))), // Speed up for tests
+      waitForTimeout: (ms: number) => new Promise(resolve => setTimeout(resolve, Math.min(ms, 100))),
       waitForFunction: () => Promise.resolve(),
       click: () => Promise.resolve(),
+      type: (_selector: string, _text: string) => Promise.resolve(),
+      focus: () => Promise.resolve(),
       fill: () => Promise.resolve(),
+      select: (_selector: string, ..._values: string[]) => Promise.resolve(),
       selectOption: () => Promise.resolve(),
       hover: () => Promise.resolve(),
       close: () => Promise.resolve(),
+      keyboard: mockKeyboard,
     };
 
     this.sessions.set(sessionId, mockPage);

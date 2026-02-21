@@ -7,32 +7,31 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
  * 
  * This allows MCP servers deployed as Cloudflare Workers to be called directly
  * via service bindings without exposing public URLs.
+ *
+ * Supports an optional AbortSignal to cancel the SSE connection (critical for
+ * staying within Cloudflare free-tier DO duration limits).
  */
 export class ServiceBindingSSEClientTransport extends SSEClientTransport {
   private serviceBinding: Fetcher;
 
-  constructor(serviceBinding: Fetcher, endpoint: string = '/sse') {
-    // Create a dummy URL since we're using service bindings
+  constructor(serviceBinding: Fetcher, endpoint: string = '/sse', abortSignal?: AbortSignal) {
     const dummyUrl = new URL(endpoint, 'https://service-binding');
     
-    // Override fetch to use service binding
     const fetchOverride: typeof fetch = async (
       fetchUrl: RequestInfo | URL,
       fetchInit: RequestInit = {}
     ) => {
-      // Create the request but route it through service binding
       const request = new Request(fetchUrl.toString(), {
         ...fetchInit,
         headers: {
           ...fetchInit?.headers,
         },
+        signal: abortSignal ?? fetchInit?.signal,
       });
       
-      // Use service binding fetch instead of regular fetch
       return await serviceBinding.fetch(request);
     };
 
-    // Initialize the parent SSEClientTransport with our custom fetch
     super(dummyUrl, { 
       eventSourceInit: {
         fetch: fetchOverride

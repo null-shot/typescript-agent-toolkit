@@ -1459,7 +1459,8 @@ export function setupDashboardRoutes(
         imagesEnabled,
         c.env.SESSIONS,
       );
-      const systemContent = basePrompt + parsedTopic + kbPrompt;
+      const systemContent =
+        kbPrompt + "\n\n" + basePrompt + parsedTopic;
       const sessionId = `dashboard-preview-${Date.now()}`;
 
       const generated = await sendAgentMessage(
@@ -1649,7 +1650,8 @@ export function setupDashboardRoutes(
           imagesEnabled,
           c.env.SESSIONS,
         );
-        const systemContent = basePrompt + parsedTopic + kbPrompt;
+        const systemContent =
+          kbPrompt + "\n\n" + basePrompt + parsedTopic;
         const sessionId = `dashboard-post-${Date.now()}`;
 
         // #region agent log

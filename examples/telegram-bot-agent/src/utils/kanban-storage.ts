@@ -1,11 +1,14 @@
 /**
- * Kanban Task Storage
+ * Kanban Task Storage — Single-Key Architecture
  *
- * KV-based CRUD for persistent Kanban tasks.
+ * All tasks stored in one KV key for efficiency (1 read instead of N+1).
  *
- * Keys:
- *   kanban:tasks       → JSON array of all task IDs
- *   kanban:task:{id}   → JSON KanbanTask object
+ * Key:
+ *   kanban:board  → JSON array of KanbanTask objects
+ *
+ * Legacy fallback:
+ *   kanban:tasks       → JSON array of task IDs (old index)
+ *   kanban:task:{id}   → JSON KanbanTask object (old per-task keys)
  */
 
 import {
@@ -22,26 +25,24 @@ import {
   type TaskEscalation,
 } from "../types/kanban";
 
-const TASK_INDEX_KEY = "kanban:tasks";
-const TASK_KEY = (id: string) => `kanban:task:${id}`;
+const BOARD_KEY = "kanban:board";
+const LEGACY_INDEX_KEY = "kanban:tasks";
+const LEGACY_TASK_KEY = (id: string) => `kanban:task:${id}`;
 const MAX_LOGS_PER_TASK = 100;
 
 /**
- * Mutex-like guard for the task index.
- * Prevents concurrent read-modify-write from corrupting the ID list.
- * Only effective within a single Worker invocation (in-memory).
- * For cross-request safety, we rely on KV eventual consistency being "good enough"
- * since cron and webhook rarely write the index at the exact same millisecond.
+ * Mutex guard for the board key.
+ * Prevents concurrent read-modify-write within a single Worker invocation.
  */
-let indexLock: Promise<void> = Promise.resolve();
+let boardLock: Promise<void> = Promise.resolve();
 
-async function withIndexLock<T>(fn: () => Promise<T>): Promise<T> {
+async function withBoardLock<T>(fn: () => Promise<T>): Promise<T> {
   let release: () => void;
   const next = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const previous = indexLock;
-  indexLock = next;
+  const previous = boardLock;
+  boardLock = next;
   await previous;
   try {
     return await fn();
@@ -50,26 +51,67 @@ async function withIndexLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-// ─── Read ──────────────────────────────────────────────────────────
+// ─── Internal: Raw task array read/write ────────────────────────────
 
-/**
- * Get the full Kanban board (all tasks grouped by status)
- */
-export async function getKanbanBoard(kv: KVNamespace): Promise<KanbanBoard> {
-  const ids = await getTaskIds(kv);
-  const tasks = await Promise.all(ids.map((id) => getTask(kv, id)));
-  const valid = tasks.filter(Boolean) as KanbanTask[];
+async function loadAllTasks(kv: KVNamespace): Promise<KanbanTask[]> {
+  const raw = await kv.get(BOARD_KEY);
+  if (raw) {
+    const tasks = JSON.parse(raw) as KanbanTask[];
+    for (const t of tasks) {
+      if (!t.source) t.source = "owner";
+    }
+    return tasks;
+  }
 
+  // Fallback: migrate from legacy N+1 format
+  const legacyIndex = await kv.get(LEGACY_INDEX_KEY);
+  if (!legacyIndex) return [];
+
+  const ids = JSON.parse(legacyIndex) as string[];
+  const tasks = (
+    await Promise.all(
+      ids.map(async (id) => {
+        const r = await kv.get(LEGACY_TASK_KEY(id));
+        if (!r) return null;
+        const task = JSON.parse(r) as KanbanTask;
+        if (!task.source) task.source = "owner";
+        return task;
+      }),
+    )
+  ).filter(Boolean) as KanbanTask[];
+
+  // Persist in new format and clean up legacy keys
+  await kv.put(BOARD_KEY, JSON.stringify(tasks));
+  await kv.delete(LEGACY_INDEX_KEY);
+  for (const id of ids) {
+    await kv.delete(LEGACY_TASK_KEY(id));
+  }
+  console.log(`[kanban] Migrated ${tasks.length} tasks from legacy N+1 to single-key`);
+
+  return tasks;
+}
+
+async function saveAllTasks(kv: KVNamespace, tasks: KanbanTask[]): Promise<void> {
+  await kv.put(BOARD_KEY, JSON.stringify(tasks));
+}
+
+function findTaskById(tasks: KanbanTask[], id: string): KanbanTask | undefined {
+  return tasks.find((t) => t.id === id);
+}
+
+// ─── Board helpers ──────────────────────────────────────────────────
+
+function buildBoard(tasks: KanbanTask[]): KanbanBoard {
   const board: KanbanBoard = {
     queued: [],
     inProgress: [],
     awaitingApproval: [],
     done: [],
     failed: [],
-    totalTasks: valid.length,
+    totalTasks: tasks.length,
   };
 
-  for (const task of valid) {
+  for (const task of tasks) {
     switch (task.status) {
       case "queued":
         board.queued.push(task);
@@ -89,7 +131,6 @@ export async function getKanbanBoard(kv: KVNamespace): Promise<KanbanBoard> {
     }
   }
 
-  // Sort: newest first for queued, oldest first for in-progress
   board.queued.sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
@@ -109,6 +150,17 @@ export async function getKanbanBoard(kv: KVNamespace): Promise<KanbanBoard> {
   return board;
 }
 
+// ─── Read ───────────────────────────────────────────────────────────
+
+/**
+ * Get the full Kanban board (all tasks grouped by status).
+ * Single KV read.
+ */
+export async function getKanbanBoard(kv: KVNamespace): Promise<KanbanBoard> {
+  const tasks = await loadAllTasks(kv);
+  return buildBoard(tasks);
+}
+
 /**
  * Get a single task by ID
  */
@@ -116,24 +168,11 @@ export async function getTask(
   kv: KVNamespace,
   id: string,
 ): Promise<KanbanTask | null> {
-  const raw = await kv.get(TASK_KEY(id));
-  if (!raw) return null;
-  const task = JSON.parse(raw) as KanbanTask;
-  // Backfill source for tasks created before the migration
-  if (!task.source) task.source = "owner";
-  return task;
+  const tasks = await loadAllTasks(kv);
+  return findTaskById(tasks, id) ?? null;
 }
 
-/**
- * Get all task IDs
- */
-async function getTaskIds(kv: KVNamespace): Promise<string[]> {
-  const raw = await kv.get(TASK_INDEX_KEY);
-  if (!raw) return [];
-  return JSON.parse(raw) as string[];
-}
-
-// ─── Write ─────────────────────────────────────────────────────────
+// ─── Write ──────────────────────────────────────────────────────────
 
 /**
  * Create a new Kanban task
@@ -172,13 +211,10 @@ export async function createTask(
     runCount: task.runCount || 0,
   };
 
-  // Save task, then add to index (locked to prevent concurrent corruption)
-  await kv.put(TASK_KEY(id), JSON.stringify(newTask));
-
-  await withIndexLock(async () => {
-    const ids = await getTaskIds(kv);
-    ids.push(id);
-    await kv.put(TASK_INDEX_KEY, JSON.stringify(ids));
+  await withBoardLock(async () => {
+    const tasks = await loadAllTasks(kv);
+    tasks.push(newTask);
+    await saveAllTasks(kv, tasks);
   });
 
   return newTask;
@@ -212,26 +248,23 @@ export async function updateTask(
     >
   >,
 ): Promise<KanbanTask | null> {
-  const task = await getTask(kv, id);
-  if (!task) return null;
+  return withBoardLock(async () => {
+    const tasks = await loadAllTasks(kv);
+    const task = findTaskById(tasks, id);
+    if (!task) return null;
 
-  // ── State machine guard ───────────────────────────────────────
-  if (updates.status && updates.status !== task.status) {
-    if (!validateTransition(task.status, updates.status)) {
-      throw new Error(
-        `Invalid task transition: ${task.status} → ${updates.status} (task ${id})`,
-      );
+    if (updates.status && updates.status !== task.status) {
+      if (!validateTransition(task.status, updates.status)) {
+        throw new Error(
+          `Invalid task transition: ${task.status} → ${updates.status} (task ${id})`,
+        );
+      }
     }
-  }
 
-  const updated: KanbanTask = {
-    ...task,
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  };
-
-  await kv.put(TASK_KEY(id), JSON.stringify(updated));
-  return updated;
+    Object.assign(task, updates, { updatedAt: new Date().toISOString() });
+    await saveAllTasks(kv, tasks);
+    return task;
+  });
 }
 
 /**
@@ -241,14 +274,13 @@ export async function deleteTask(
   kv: KVNamespace,
   id: string,
 ): Promise<boolean> {
-  return withIndexLock(async () => {
-    const ids = await getTaskIds(kv);
-    const idx = ids.indexOf(id);
+  return withBoardLock(async () => {
+    const tasks = await loadAllTasks(kv);
+    const idx = tasks.findIndex((t) => t.id === id);
     if (idx === -1) return false;
 
-    ids.splice(idx, 1);
-    await kv.put(TASK_INDEX_KEY, JSON.stringify(ids));
-    await kv.delete(TASK_KEY(id));
+    tasks.splice(idx, 1);
+    await saveAllTasks(kv, tasks);
     return true;
   });
 }
@@ -264,7 +296,7 @@ export async function moveTask(
   return updateTask(kv, id, { status: newStatus });
 }
 
-// ─── Approval Workflow ─────────────────────────────────────────────
+// ─── Approval Workflow ──────────────────────────────────────────────
 
 /**
  * Create a task that needs owner approval (e.g., post publishing).
@@ -276,7 +308,6 @@ export async function createApprovalTask(
     description: string;
     action: TaskAction;
     content: string;
-    /** Topic/instructions for AI generation (recurring). Separate from content. */
     topic?: string;
     targetChatId?: number;
     targetChatTitle?: string;
@@ -315,22 +346,28 @@ export async function rejectTask(
   kv: KVNamespace,
   id: string,
 ): Promise<KanbanTask | null> {
-  const task = await getTask(kv, id);
-  if (!task?.approval) return null;
+  return withBoardLock(async () => {
+    const tasks = await loadAllTasks(kv);
+    const task = findTaskById(tasks, id);
+    if (!task?.approval) return null;
 
-  const approval: KanbanTask["approval"] = {
-    ...task.approval,
-    respondedAt: new Date().toISOString(),
-    decision: "rejected",
-  };
+    const approval: KanbanTask["approval"] = {
+      ...task.approval,
+      respondedAt: new Date().toISOString(),
+      decision: "rejected",
+    };
 
-  return updateTask(kv, id, {
-    status: "failed",
-    approval,
+    Object.assign(task, {
+      status: "failed",
+      approval,
+      updatedAt: new Date().toISOString(),
+    });
+    await saveAllTasks(kv, tasks);
+    return task;
   });
 }
 
-// ─── Escalation ────────────────────────────────────────────────────
+// ─── Escalation ─────────────────────────────────────────────────────
 
 /**
  * Create an escalation task — bot couldn't handle something and needs owner input.
@@ -386,7 +423,7 @@ export async function getPendingApprovals(
   return board.awaitingApproval;
 }
 
-// ─── Stats & Logs ──────────────────────────────────────────────────
+// ─── Stats & Logs ───────────────────────────────────────────────────
 
 /**
  * Increment a stat counter on a task
@@ -397,14 +434,17 @@ export async function incrementTaskStat(
   statKey: string,
   amount = 1,
 ): Promise<KanbanTask | null> {
-  const task = await getTask(kv, id);
-  if (!task) return null;
+  return withBoardLock(async () => {
+    const tasks = await loadAllTasks(kv);
+    const task = findTaskById(tasks, id);
+    if (!task) return null;
 
-  task.stats[statKey] = (task.stats[statKey] || 0) + amount;
-  task.updatedAt = new Date().toISOString();
+    task.stats[statKey] = (task.stats[statKey] || 0) + amount;
+    task.updatedAt = new Date().toISOString();
 
-  await kv.put(TASK_KEY(id), JSON.stringify(task));
-  return task;
+    await saveAllTasks(kv, tasks);
+    return task;
+  });
 }
 
 /**
@@ -416,24 +456,26 @@ export async function addTaskLog(
   message: string,
   category?: string,
 ): Promise<KanbanTask | null> {
-  const task = await getTask(kv, id);
-  if (!task) return null;
+  return withBoardLock(async () => {
+    const tasks = await loadAllTasks(kv);
+    const task = findTaskById(tasks, id);
+    if (!task) return null;
 
-  const entry: TaskLogEntry = {
-    time: new Date().toISOString(),
-    message,
-    category,
-  };
+    const entry: TaskLogEntry = {
+      time: new Date().toISOString(),
+      message,
+      category,
+    };
 
-  task.logs.push(entry);
-  // Keep only last N logs
-  if (task.logs.length > MAX_LOGS_PER_TASK) {
-    task.logs = task.logs.slice(-MAX_LOGS_PER_TASK);
-  }
-  task.updatedAt = new Date().toISOString();
+    task.logs.push(entry);
+    if (task.logs.length > MAX_LOGS_PER_TASK) {
+      task.logs = task.logs.slice(-MAX_LOGS_PER_TASK);
+    }
+    task.updatedAt = new Date().toISOString();
 
-  await kv.put(TASK_KEY(id), JSON.stringify(task));
-  return task;
+    await saveAllTasks(kv, tasks);
+    return task;
+  });
 }
 
 /**
@@ -443,18 +485,21 @@ export async function recordTaskRun(
   kv: KVNamespace,
   id: string,
 ): Promise<KanbanTask | null> {
-  const task = await getTask(kv, id);
-  if (!task) return null;
+  return withBoardLock(async () => {
+    const tasks = await loadAllTasks(kv);
+    const task = findTaskById(tasks, id);
+    if (!task) return null;
 
-  task.runCount++;
-  task.lastRunAt = new Date().toISOString();
-  task.updatedAt = new Date().toISOString();
+    task.runCount++;
+    task.lastRunAt = new Date().toISOString();
+    task.updatedAt = new Date().toISOString();
 
-  await kv.put(TASK_KEY(id), JSON.stringify(task));
-  return task;
+    await saveAllTasks(kv, tasks);
+    return task;
+  });
 }
 
-// ─── Queries ───────────────────────────────────────────────────────
+// ─── Queries ────────────────────────────────────────────────────────
 
 /**
  * Find active persistent task for a chat + role (used to link moderation/proactive)
@@ -486,7 +531,6 @@ export async function ensurePersistentTask(
   const existing = await findActiveTask(kv, chatId, role);
   if (existing) return existing;
 
-  // Derive action from role
   const roleActionMap: Record<string, KanbanTask["action"]> = {
     moderator: "moderate",
     support: "support",
@@ -542,7 +586,6 @@ export async function getAggregateStats(kv: KVNamespace): Promise<{
   const activeTasks = board.inProgress;
   const statsSummary: TaskStats = {};
 
-  // Aggregate stats from all active persistent tasks
   for (const task of activeTasks) {
     for (const [key, value] of Object.entries(task.stats)) {
       statsSummary[key] = (statsSummary[key] || 0) + value;
@@ -578,51 +621,59 @@ export async function cleanupOldTasks(
   maxAgeDays = 30,
   escalationMaxDays = 7,
 ): Promise<number> {
-  const board = await getKanbanBoard(kv);
-  const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
-  const escalationCutoff = Date.now() - escalationMaxDays * 24 * 60 * 60 * 1000;
-  let removed = 0;
+  return withBoardLock(async () => {
+    const tasks = await loadAllTasks(kv);
+    const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+    const escalationCutoff = Date.now() - escalationMaxDays * 24 * 60 * 60 * 1000;
 
-  // Remove old done/failed tasks
-  for (const task of [...board.done, ...board.failed]) {
-    if (new Date(task.updatedAt).getTime() < cutoff) {
-      await deleteTask(kv, task.id);
-      removed++;
+    const before = tasks.length;
+    const kept = tasks.filter((task) => {
+      if (
+        (task.status === "done" || task.status === "failed") &&
+        new Date(task.updatedAt).getTime() < cutoff
+      ) {
+        return false;
+      }
+      if (
+        task.status === "queued" &&
+        task.source === "bot-escalation" &&
+        new Date(task.createdAt).getTime() < escalationCutoff
+      ) {
+        return false;
+      }
+      if (
+        task.status === "awaiting-approval" &&
+        new Date(task.createdAt).getTime() < escalationCutoff
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    const removed = before - kept.length;
+    if (removed > 0) {
+      await saveAllTasks(kv, kept);
     }
-  }
-
-  // Remove orphaned escalations (queued bot-escalation older than 7 days)
-  for (const task of board.queued) {
-    if (
-      task.source === "bot-escalation" &&
-      new Date(task.createdAt).getTime() < escalationCutoff
-    ) {
-      await deleteTask(kv, task.id);
-      removed++;
-    }
-  }
-
-  // Remove stale awaiting-approval tasks (older than 7 days, never acted on)
-  for (const task of board.awaitingApproval) {
-    if (new Date(task.createdAt).getTime() < escalationCutoff) {
-      await deleteTask(kv, task.id);
-      removed++;
-    }
-  }
-
-  return removed;
+    return removed;
+  });
 }
 
 // ─── Scheduling Queries ─────────────────────────────────────────────
 
 /**
- * Check if there are any tasks at all (quick index-only read, no task loading).
+ * Check if there are any tasks at all (single read with cache).
  * Use this to short-circuit cron processing when the board is empty.
  */
 export async function hasAnyTasks(kv: KVNamespace): Promise<boolean> {
-  const raw = await kv.get(TASK_INDEX_KEY);
-  if (!raw) return false;
-  const ids = JSON.parse(raw) as string[];
+  const raw = await kv.get(BOARD_KEY, { cacheTtl: 60 });
+  if (raw) {
+    const tasks = JSON.parse(raw) as KanbanTask[];
+    return tasks.length > 0;
+  }
+  // Check legacy key too
+  const legacy = await kv.get(LEGACY_INDEX_KEY, { cacheTtl: 60 });
+  if (!legacy) return false;
+  const ids = JSON.parse(legacy) as string[];
   return ids.length > 0;
 }
 

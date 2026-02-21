@@ -56,6 +56,8 @@ That's it. Workers AI is free and requires no API keys.
 
 Your worker is live at `https://single-worker.YOUR-SUBDOMAIN.workers.dev`
 
+> **Free tier note:** Default model is Llama 3.1 8B (fast, fits within DO free tier 30s limit). For larger models like Llama 3.3 70B, you need the Workers Paid plan ($5/mo) — set `MODEL_ID` in `wrangler.jsonc` to `@cf/meta/llama-3.3-70b-instruct-fp8-fast`.
+
 ## Local Development
 
 ```bash
@@ -66,7 +68,7 @@ pnpm dev
 
 ## Optional: Use a Different AI Provider
 
-Default is `workers-ai` (free, Llama 3.3 70B). To use OpenAI, Anthropic, etc.:
+Default is `workers-ai` (free, Llama 3.1 8B). To use a bigger model or a different provider:
 
 1. Change `AI_PROVIDER` in `wrangler.jsonc`:
 

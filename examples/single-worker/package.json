@@ -19,7 +19,12 @@
     "ai": "catalog:",
     "hono": "^4.11.9",
     "workers-ai-provider": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "kv-mcp": "workspace:*",
+    "analytics-mcp": "workspace:*",
+    "vectorize-mcp": "workspace:*",
+    "browser-mcp-example": "workspace:*",
+    "email-mcp": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

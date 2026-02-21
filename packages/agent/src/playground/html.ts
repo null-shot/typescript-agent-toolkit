@@ -2979,7 +2979,7 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 				var basePath = currentAgent.path.replace(new RegExp('/chat.*$'), '') || currentAgent.path;
 				var response = await fetch(basePath + '/mcp', {
 					method: 'GET',
-					signal: AbortSignal.timeout(5000)
+					signal: AbortSignal.timeout(30000)
 				});
 
 				isConnected = response.ok;
@@ -3023,7 +3023,7 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 				
 				const response = await fetch(mcpUrl, {
 					method: 'GET',
-					signal: AbortSignal.timeout(5000)
+					signal: AbortSignal.timeout(30000)
 				});
 				
 				if (!response.ok) {
@@ -3113,15 +3113,46 @@ export function generatePlaygroundHTML(options: PlaygroundOptions = {}): string 
 
 		function formatToolHint(tool) {
 			var name = tool.name || '';
-			if (name === 'generate_image') return 'generate an image of a sunset';
-			if (name === 'text_to_speech') return 'say hello world in English';
-			if (name === 'add_todo' || name === 'create_todo') return 'add a todo: buy groceries';
-			if (name === 'list_todos') return 'show my todos';
-			if (name === 'submit_expense') return 'log expense: lunch $15';
-			if (name === 'list_expenses') return 'show my expenses';
-			if (name === 'get_env_variable') return 'what is DEFAULT_NAME?';
-			if (name === 'get_secret') return 'what is the secret number?';
-			if (name === 'guess_number') return 'guess number 7';
+			var hints = {
+				'generate_image': 'generate an image of a sunset',
+				'text_to_speech': 'say hello world in English',
+				'add_todo': 'add a todo: buy groceries',
+				'create_todo': 'add a todo: buy groceries',
+				'list_todos': 'show my todos',
+				'submit_expense': 'log expense: lunch $15',
+				'list_expenses': 'show my expenses',
+				'get_env_variable': 'what is DEFAULT_NAME?',
+				'get_secret': 'what is the secret number?',
+				'guess_number': 'guess number 7',
+				'is_prime': 'is 17 a prime number?',
+				'track_metric': 'track a page_view metric',
+				'track_batch_metrics': 'track 5 signup events',
+				'query_analytics': 'query analytics for today',
+				'get_metrics_summary': 'show metrics summary',
+				'get_time_series': 'show time series for page views',
+				'analyze_trends': 'analyze trends for signups',
+				'list_datasets': 'list analytics datasets',
+				'get_recent_data': 'show recent analytics data',
+				'add_document': 'add a document about AI agents',
+				'search_similar': 'search for documents about serverless',
+				'get_document': 'get document by ID',
+				'update_document': 'update document content',
+				'delete_document': 'delete document',
+				'list_documents': 'list all documents',
+				'find_related': 'find related documents',
+				'batch_add_documents': 'add multiple documents',
+				'get_index_stats': 'show vectorize index stats',
+				'navigate': 'open https://example.com',
+				'screenshot': 'take a screenshot of the page',
+				'extract_text': 'extract text from the page',
+				'extract_links': 'extract all links from the page',
+				'close_session': 'close browser session',
+				'send_email': 'send an email to test@example.com',
+				'create_test_email': 'create a test email',
+				'get_email': 'get email by ID',
+				'list_emails': 'list all emails',
+			};
+			if (hints[name]) return hints[name];
 			var params = (tool.params || []).slice(0, 2).join(', ');
 			return 'use ' + name + (params ? ' with ' + params : '');
 		}

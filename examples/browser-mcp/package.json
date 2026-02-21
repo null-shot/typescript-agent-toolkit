@@ -4,6 +4,7 @@
   "description": "Browser Rendering MCP server for web scraping and automation",
   "private": true,
   "type": "module",
+  "main": "src/index.ts",
   "scripts": {
     "build": "tsc",
     "dev": "concurrently \"npx @modelcontextprotocol/inspector\" \"wrangler dev --remote\" --kill-others",

@@ -102,7 +102,7 @@ export async function getPublishedHistory(
 	kv: KVNamespace,
 	taskId: string,
 ): Promise<PublishedPostEntry[]> {
-	const raw = await kv.get(HISTORY_KEY(taskId));
+	const raw = await kv.get(HISTORY_KEY(taskId), { cacheTtl: 300 });
 	if (!raw) return [];
 
 	try {
@@ -167,43 +167,43 @@ POLL UNIQUENESS RULES:
 
 		return `
 
-PREVIOUSLY PUBLISHED POSTS in this series (most recent first):
+=== THE STORY SO FAR (most recent first) ===
 ${entries}
 
 Recent format sequence: ${formatSummary}
 
-CONNECTED NARRATIVE — all posts in this series develop ONE coherent thread:
-- Every post (text, voice, photo, poll) continues the SAME conversation — they are episodes, not isolated fragments
-- Reference what was said before: "We explored X, now let's consider Y" / "Following up on our discussion about..."
-- Voice messages deepen the narrative — treat them as the podcast commentary on the topic
-- Text posts introduce new facts or angles that build on the previous episode
-- Photo posts visualize or illustrate ideas that were discussed
-- Polls engage the audience on questions raised by the ongoing narrative
-- The reader/listener should feel a coherent progression of thought across all formats
+YOUR TASK: Write the NEXT EPISODE in this series. Not a random new post — the next logical step in the narrative.
+
+NARRATIVE RULES:
+- Read the previous posts above. Your post MUST continue this conversation.
+- The most recent post ended on a certain point — pick up from there or react to it.
+- Use natural transitions: "After exploring X..." / "Building on that..." / "But there's another side to this..."
+- Different formats serve different narrative purposes:
+  * Text: introduce new facts, angles, or developments
+  * Voice: deeper commentary, like a podcast continuing the discussion
+  * Photo: visualize or illustrate a concept from the story
+  * Poll: engage the audience on a question raised by the narrative
 
 FORMAT ROTATION:
 - Do NOT repeat the same format as the most recent post
 - Cycle through: text → voice → photo → poll (roughly, not rigidly)
 - If the last 2+ posts used the same format, DEFINITELY pick a different one
-- Voice is great for storytelling and deep-dives; use it regularly in the rotation
 
 UNIQUENESS:
 - Never repeat the same point, angle, or conclusion
-- Each post advances the narrative — new information, deeper analysis, a different perspective
-- If you choose voice: continue the spoken narrative thread naturally from where previous voices left off
-- If you choose poll: ask about something that emerged from the recent discussion`;
+- Each post advances the narrative — new information, deeper analysis, a different perspective`;
 	}
 
 	return `
 
-PREVIOUSLY PUBLISHED POSTS (DO NOT REPEAT OR CLOSELY PARAPHRASE ANY OF THESE):
+=== PREVIOUS EPISODES (most recent first — your post is the NEXT episode) ===
 ${entries}
 
-UNIQUENESS RULES:
-- Your post MUST be substantially different from ALL of the above
-- Do NOT reuse the same title, angle, statistic, or closing question
-- Find a completely new angle: a contrarian take, a niche detail, a recent development, a surprising connection, a different subtopic
-- If the previous posts used a general overview, go deep into a specific aspect
-- If they went deep, zoom out to a broader perspective or compare with something unexpected
-- Different opening, different facts, different conclusion — every part must be fresh`;
+NARRATIVE CONTINUITY:
+- Read the posts above. Your post continues this series — it's the next chapter, not a standalone piece.
+- Pick up where the last post left off, or react to it, or reveal the next facet of the story.
+- Use transitions: "We looked at X, but what about..." / "There's more to this story..." / "Building on that idea..."
+- Do NOT reuse the same title, angle, statistic, or closing question.
+- Find the natural next step: if previous posts were overviews, go specific. If specific, zoom out or connect to something new.
+- The reader following the series should feel clear progression.`;
 }

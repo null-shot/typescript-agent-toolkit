@@ -20,8 +20,8 @@ export function setupServerTools(server: McpServer, repository: AnalyticsReposit
     {
       dataset: z.string().describe('Dataset name to write to'),
       dimensions: z.record(z.string(), z.string()).describe('Categorical data for grouping'),
-      metrics: z.record(z.string(), z.number()).describe('Numerical measurements'),
-      timestamp: z.number().optional().describe('Unix timestamp (optional)')
+      metrics: z.record(z.string(), z.coerce.number()).describe('Numerical measurements'),
+      timestamp: z.coerce.number().optional().describe('Unix timestamp (optional)')
     },
     async ({ dataset, dimensions, metrics, timestamp }: {
       dataset: string;
@@ -85,8 +85,8 @@ export function setupServerTools(server: McpServer, repository: AnalyticsReposit
       dataset: z.string().describe('Dataset name to write to'),
       dataPoints: z.array(z.object({
         dimensions: z.record(z.string(), z.string()),
-        metrics: z.record(z.string(), z.number()),
-        timestamp: z.number().optional(),
+        metrics: z.record(z.string(), z.coerce.number()),
+        timestamp: z.coerce.number().optional(),
         metadata: z.record(z.string(), z.any()).optional()
       })).describe('Array of data points to track')
     },
@@ -148,7 +148,7 @@ export function setupServerTools(server: McpServer, repository: AnalyticsReposit
     'Execute SQL queries against analytics data',
     {
       sql: z.string().describe('SQL query to execute'),
-      timeout: z.number().optional().describe('Query timeout in seconds (default: 30)')
+      timeout: z.coerce.number().optional().describe('Query timeout in seconds (default: 30)')
     },
     async ({ sql, timeout }: {
       sql: string;
@@ -414,7 +414,7 @@ export function setupServerTools(server: McpServer, repository: AnalyticsReposit
     'Get recent data from a dataset for debugging and inspection',
     {
       dataset: z.string().describe('Dataset name to query'),
-      limit: z.number().min(1).max(1000).optional().describe('Maximum number of records to return (default: 100)')
+      limit: z.coerce.number().min(1).max(1000).optional().describe('Maximum number of records to return (default: 100)')
     },
     async ({ dataset, limit }: {
       dataset: string;

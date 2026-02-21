@@ -288,7 +288,7 @@ async function handleWritePost(
     const imagesEnabled =
       (await env.SESSIONS?.get("setting:image_with_posts")) !== "false";
     const basePrompt = getPromptForFormat(postFormat, !!env.AI, imagesEnabled);
-    const systemContent = basePrompt + parsedTopic + kbPrompt;
+    const systemContent = kbPrompt + "\n\n" + basePrompt + parsedTopic;
 
     // Generate post content — fallback chain: Agent → Workers AI
     let content: string | null = null;

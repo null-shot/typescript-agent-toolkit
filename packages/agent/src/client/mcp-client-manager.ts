@@ -80,11 +80,11 @@ export class NullShotMCPClientManager extends MCPClientManager {
 	}
 
 	/**
-	 * Connect to a service binding MCP server
+	 * Connect to a service binding MCP server.
+	 * Pass an AbortSignal to cancel the underlying SSE connection on timeout.
 	 */
-	async connectServiceBinding(serviceBinding: Fetcher, serverName: string, endpoint: string = '/sse'): Promise<{ id: string }> {
-		// Create transport and client directly
-		const transport = new ServiceBindingSSEClientTransport(serviceBinding, endpoint);
+	async connectServiceBinding(serviceBinding: Fetcher, serverName: string, endpoint: string = '/sse', abortSignal?: AbortSignal): Promise<{ id: string }> {
+		const transport = new ServiceBindingSSEClientTransport(serviceBinding, endpoint, abortSignal);
 		const client = new Client({ name: 'unified-client', version: '1.0.0' }, { capabilities: {} });
 
 		// Initialize enhanced connection info

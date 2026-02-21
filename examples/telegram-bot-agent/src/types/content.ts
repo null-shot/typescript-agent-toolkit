@@ -131,9 +131,14 @@ export function normalizePostFormat(text: string): string {
 
   let result = text.trim();
 
-  // Step 0: Strip bold asterisks from title if AI still generates them
-  // Matches *Title Text* at the start of the text
-  result = result.replace(/^\*([^*\n]+)\*/, "$1");
+  // Strip all Markdown-style formatting that Telegram shows as raw characters.
+  // Order matters: double markers first, then single.
+  result = result.replace(/\*\*([^*]+)\*\*/g, "$1");   // **bold**
+  result = result.replace(/__([^_]+)__/g, "$1");        // __bold__
+  result = result.replace(/(?<!\w)\*([^*\n]+)\*(?!\w)/g, "$1"); // *italic*
+  result = result.replace(/(?<!\w)_([^_\n]+)_(?!\w)/g, "$1");   // _italic_
+  result = result.replace(/`([^`]+)`/g, "$1");          // `code`
+  result = result.replace(/^#{1,3}\s+/gm, "");          // ### headings
 
   // Step 1: Find the title — first line of the text (short line, < 80 chars)
   const firstNewline = result.indexOf("\n");
@@ -267,12 +272,71 @@ function tryRepairContentJson(raw: string): string | null {
 }
 
 /**
+ * Fix literal newlines/tabs inside JSON string values.
+ * AI models often generate pretty-printed captions with real line breaks
+ * instead of \n escape sequences, which makes JSON.parse fail.
+ */
+function tryFixLiteralNewlines(raw: string): string | null {
+  let result = "";
+  let inString = false;
+  let escape = false;
+  let changed = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]!;
+    if (escape) {
+      result += ch;
+      escape = false;
+      continue;
+    }
+    if (ch === "\\" && inString) {
+      result += ch;
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+    if (inString && ch === "\n") {
+      result += "\\n";
+      changed = true;
+      continue;
+    }
+    if (inString && ch === "\r") {
+      changed = true;
+      continue;
+    }
+    if (inString && ch === "\t") {
+      result += "\\t";
+      changed = true;
+      continue;
+    }
+    result += ch;
+  }
+
+  if (!changed) return null;
+
+  try {
+    JSON.parse(result);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Try to parse a JSON string as a ContentBlock, applying defaults,
  * normalization, and length limits.  Returns null on failure.
  */
 function tryParseAsContentBlock(jsonStr: string): ContentBlock | null {
-  // Attempt direct parse first, then repaired parse
-  for (const candidate of [jsonStr, tryRepairContentJson(jsonStr)]) {
+  // Attempt direct parse, then newline fix, then quote repair
+  for (const candidate of [
+    jsonStr,
+    tryFixLiteralNewlines(jsonStr),
+    tryRepairContentJson(jsonStr),
+  ]) {
     if (!candidate) continue;
 
     let parsed: Record<string, unknown>;

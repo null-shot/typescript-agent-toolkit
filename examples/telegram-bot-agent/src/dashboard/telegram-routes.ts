@@ -418,18 +418,33 @@ export function setupTelegramRoutes(
 
   // ── Telegram Bot Singleton ──────────────────────────────────────────
   // Bot + handlers created ONCE per isolate via setupCoreHandlers.
+  // IMPORTANT: bindings (AI, SESSIONS, etc.) are refreshed on every
+  // webhook call via a mutable env reference so handlers never use stale proxies.
 
   let _tgBot:
     | {
         webhookHandler: (req: Request) => Promise<Response>;
         logRef: { current?: InstanceType<typeof TelegramLog> };
+        envRef: { current: TelegramBotEnv };
       }
     | undefined;
 
   async function ensureTelegramBot(
     env: any,
   ): Promise<NonNullable<typeof _tgBot>> {
-    if (_tgBot) return _tgBot;
+    if (_tgBot) {
+      // Refresh bindings from the current request's env so cached handlers
+      // never reference stale AI / KV / Vectorize proxies.
+      const freshService = createInternalAgentService(env, config);
+      const freshEnv = buildTelegramEnv(
+        env,
+        freshService,
+        config,
+        true,
+      ) as TelegramBotEnv;
+      Object.assign(_tgBot.envRef.current, freshEnv);
+      return _tgBot;
+    }
 
     const internalAgentService = createInternalAgentService(env, config);
     const telegramEnv = buildTelegramEnv(
@@ -438,6 +453,9 @@ export function setupTelegramRoutes(
       config,
       true,
     ) as TelegramBotEnv;
+
+    // Mutable reference: handlers close over envRef, we swap .current each request
+    const envRef: { current: TelegramBotEnv } = { current: telegramEnv };
 
     const logRef: { current?: InstanceType<typeof TelegramLog> } = {};
 
@@ -517,7 +535,7 @@ export function setupTelegramRoutes(
     console.log(
       "[TelegramBot] Singleton initialized via setupCoreHandlers (full plug-and-play)",
     );
-    _tgBot = { webhookHandler, logRef };
+    _tgBot = { webhookHandler, logRef, envRef };
     return _tgBot;
   }
 

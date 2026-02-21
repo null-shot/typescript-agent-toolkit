@@ -954,4 +954,581 @@ export function setupBrowserTools(
       }
     }
   );
+
+  // ============================================================================
+  // INTERACTION TOOLS
+  // ============================================================================
+
+  server.tool(
+    "click_element",
+    "Click on a page element by CSS selector. Supports single/double click and waiting for navigation after click.",
+    {
+      sessionId: z.string().describe("Browser session ID"),
+      selector: z.string().describe("CSS selector of the element to click"),
+      button: z
+        .enum(["left", "right", "middle"])
+        .default("left")
+        .describe("Mouse button to use"),
+      clickCount: z
+        .number()
+        .default(1)
+        .describe("Number of clicks (2 for double-click)"),
+      waitForNavigation: z
+        .boolean()
+        .default(false)
+        .describe("Wait for page navigation after click"),
+      waitAfter: z
+        .number()
+        .default(1000)
+        .describe("Milliseconds to wait after click for dynamic content"),
+      timeout: z
+        .number()
+        .default(10000)
+        .describe("Timeout for finding the element"),
+    },
+    async (args) => {
+      try {
+        const page = await browserManager.getSession(args.sessionId);
+        if (!page) {
+          throw new SessionError(`Session ${args.sessionId} not found`, args.sessionId);
+        }
+
+        await page.waitForSelector(args.selector, { timeout: args.timeout });
+
+        if (args.waitForNavigation) {
+          await Promise.all([
+            page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 }).catch(() => {}),
+            page.click(args.selector, {
+              button: args.button as any,
+              clickCount: args.clickCount,
+            }),
+          ]);
+        } else {
+          await page.click(args.selector, {
+            button: args.button as any,
+            clickCount: args.clickCount,
+          });
+        }
+
+        if (args.waitAfter > 0) {
+          await new Promise((r) => setTimeout(r, args.waitAfter));
+        }
+
+        const currentUrl = page.url();
+        const title = await page.title();
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Clicked "${args.selector}" successfully. Page: ${title} (${currentUrl})`,
+            },
+          ],
+          sessionId: args.sessionId,
+          url: currentUrl,
+          title,
+        };
+      } catch (error) {
+        throw new ExtractionError(
+          `Click failed: ${error instanceof Error ? error.message : String(error)}`,
+          args.selector
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "fill_field",
+    "Clear an input field and type new text into it. Use for form inputs, textareas, and contenteditable elements.",
+    {
+      sessionId: z.string().describe("Browser session ID"),
+      selector: z.string().describe("CSS selector of the input element"),
+      value: z.string().describe("Text to type into the field"),
+      clearFirst: z
+        .boolean()
+        .default(true)
+        .describe("Clear existing value before typing"),
+      pressEnter: z
+        .boolean()
+        .default(false)
+        .describe("Press Enter after typing (submit form)"),
+      timeout: z
+        .number()
+        .default(10000)
+        .describe("Timeout for finding the element"),
+    },
+    async (args) => {
+      try {
+        const page = await browserManager.getSession(args.sessionId);
+        if (!page) {
+          throw new SessionError(`Session ${args.sessionId} not found`, args.sessionId);
+        }
+
+        await page.waitForSelector(args.selector, { timeout: args.timeout });
+
+        if (args.clearFirst) {
+          await page.click(args.selector, { clickCount: 3 });
+          await page.keyboard.press("Backspace");
+        }
+
+        await page.type(args.selector, args.value);
+
+        if (args.pressEnter) {
+          await page.keyboard.press("Enter");
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Filled "${args.selector}" with "${args.value.length > 50 ? args.value.substring(0, 50) + "..." : args.value}"${args.pressEnter ? " and pressed Enter" : ""}`,
+            },
+          ],
+          sessionId: args.sessionId,
+        };
+      } catch (error) {
+        throw new ExtractionError(
+          `Fill failed: ${error instanceof Error ? error.message : String(error)}`,
+          args.selector
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "select_option",
+    "Select an option from a <select> dropdown element by value or label text.",
+    {
+      sessionId: z.string().describe("Browser session ID"),
+      selector: z.string().describe("CSS selector of the <select> element"),
+      value: z
+        .string()
+        .optional()
+        .describe("Option value attribute to select"),
+      label: z
+        .string()
+        .optional()
+        .describe("Visible label text of the option to select"),
+      timeout: z
+        .number()
+        .default(10000)
+        .describe("Timeout for finding the element"),
+    },
+    async (args) => {
+      try {
+        const page = await browserManager.getSession(args.sessionId);
+        if (!page) {
+          throw new SessionError(`Session ${args.sessionId} not found`, args.sessionId);
+        }
+
+        await page.waitForSelector(args.selector, { timeout: args.timeout });
+
+        if (args.value) {
+          await page.select(args.selector, args.value);
+        } else if (args.label) {
+          await page.evaluate(
+            (sel: string, labelText: string) => {
+              const select = document.querySelector(sel) as unknown as HTMLSelectElement;
+              if (!select) throw new Error(`Select element not found: ${sel}`);
+              const option = Array.from(select.options).find(
+                (o) => o.textContent?.trim() === labelText
+              );
+              if (!option) throw new Error(`Option with label "${labelText}" not found`);
+              select.value = option.value;
+              select.dispatchEvent(new Event("change", { bubbles: true }));
+            },
+            args.selector,
+            args.label
+          );
+        } else {
+          throw new Error("Either value or label must be provided");
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Selected option in "${args.selector}"${args.value ? ` (value: ${args.value})` : ""}${args.label ? ` (label: ${args.label})` : ""}`,
+            },
+          ],
+          sessionId: args.sessionId,
+        };
+      } catch (error) {
+        throw new ExtractionError(
+          `Select failed: ${error instanceof Error ? error.message : String(error)}`,
+          args.selector
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "hover_element",
+    "Hover over a page element. Useful for triggering tooltips, dropdown menus, or hover states.",
+    {
+      sessionId: z.string().describe("Browser session ID"),
+      selector: z.string().describe("CSS selector of the element to hover"),
+      waitAfter: z
+        .number()
+        .default(500)
+        .describe("Milliseconds to wait after hover for dynamic content"),
+      timeout: z
+        .number()
+        .default(10000)
+        .describe("Timeout for finding the element"),
+    },
+    async (args) => {
+      try {
+        const page = await browserManager.getSession(args.sessionId);
+        if (!page) {
+          throw new SessionError(`Session ${args.sessionId} not found`, args.sessionId);
+        }
+
+        await page.waitForSelector(args.selector, { timeout: args.timeout });
+        await page.hover(args.selector);
+
+        if (args.waitAfter > 0) {
+          await new Promise((r) => setTimeout(r, args.waitAfter));
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Hovered over "${args.selector}" successfully`,
+            },
+          ],
+          sessionId: args.sessionId,
+        };
+      } catch (error) {
+        throw new ExtractionError(
+          `Hover failed: ${error instanceof Error ? error.message : String(error)}`,
+          args.selector
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "wait_for_element",
+    "Wait for an element to appear, disappear, or become visible/hidden on the page.",
+    {
+      sessionId: z.string().describe("Browser session ID"),
+      selector: z.string().describe("CSS selector to wait for"),
+      state: z
+        .enum(["visible", "hidden", "attached", "detached"])
+        .default("visible")
+        .describe("What state to wait for"),
+      timeout: z
+        .number()
+        .default(30000)
+        .describe("Maximum time to wait in milliseconds"),
+    },
+    async (args) => {
+      try {
+        const page = await browserManager.getSession(args.sessionId);
+        if (!page) {
+          throw new SessionError(`Session ${args.sessionId} not found`, args.sessionId);
+        }
+
+        const waitOptions: any = { timeout: args.timeout };
+        if (args.state === "hidden" || args.state === "detached") {
+          waitOptions.hidden = true;
+        } else {
+          waitOptions.visible = args.state === "visible";
+        }
+
+        await page.waitForSelector(args.selector, waitOptions);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Element "${args.selector}" is now ${args.state}`,
+            },
+          ],
+          sessionId: args.sessionId,
+        };
+      } catch (error) {
+        throw new ExtractionError(
+          `Wait failed: ${error instanceof Error ? error.message : String(error)}`,
+          args.selector
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "press_key",
+    "Press a keyboard key or key combination (e.g. Enter, Tab, Escape, Control+a).",
+    {
+      sessionId: z.string().describe("Browser session ID"),
+      key: z
+        .string()
+        .describe(
+          "Key to press: Enter, Tab, Escape, Backspace, ArrowUp, ArrowDown, Control+a, etc."
+        ),
+      selector: z
+        .string()
+        .optional()
+        .describe("Focus this element before pressing key"),
+      timeout: z
+        .number()
+        .default(5000)
+        .describe("Timeout for finding the focus element"),
+    },
+    async (args) => {
+      try {
+        const page = await browserManager.getSession(args.sessionId);
+        if (!page) {
+          throw new SessionError(`Session ${args.sessionId} not found`, args.sessionId);
+        }
+
+        if (args.selector) {
+          await page.waitForSelector(args.selector, { timeout: args.timeout });
+          await page.focus(args.selector);
+        }
+
+        await page.keyboard.press(args.key as any);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Pressed key "${args.key}"${args.selector ? ` on "${args.selector}"` : ""}`,
+            },
+          ],
+          sessionId: args.sessionId,
+        };
+      } catch (error) {
+        throw new ExtractionError(
+          `Key press failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "scroll_page",
+    "Scroll the page or a specific element. Useful for loading lazy content or reaching elements below the fold.",
+    {
+      sessionId: z.string().describe("Browser session ID"),
+      direction: z
+        .enum(["up", "down", "left", "right"])
+        .default("down")
+        .describe("Scroll direction"),
+      amount: z
+        .number()
+        .default(500)
+        .describe("Pixels to scroll"),
+      selector: z
+        .string()
+        .optional()
+        .describe("CSS selector of scrollable container (default: page)"),
+      toBottom: z
+        .boolean()
+        .default(false)
+        .describe("Scroll all the way to the bottom of the page"),
+      toTop: z
+        .boolean()
+        .default(false)
+        .describe("Scroll all the way to the top of the page"),
+    },
+    async (args) => {
+      try {
+        const page = await browserManager.getSession(args.sessionId);
+        if (!page) {
+          throw new SessionError(`Session ${args.sessionId} not found`, args.sessionId);
+        }
+
+        if (args.toBottom) {
+          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        } else if (args.toTop) {
+          await page.evaluate(() => window.scrollTo(0, 0));
+        } else {
+          const deltaX = args.direction === "right" ? args.amount : args.direction === "left" ? -args.amount : 0;
+          const deltaY = args.direction === "down" ? args.amount : args.direction === "up" ? -args.amount : 0;
+
+          if (args.selector) {
+            await page.evaluate(
+              (sel: string, dx: number, dy: number) => {
+                const el = document.querySelector(sel);
+                if (el) el.scrollBy(dx, dy);
+              },
+              args.selector,
+              deltaX,
+              deltaY
+            );
+          } else {
+            await page.evaluate(
+              (dx: number, dy: number) => window.scrollBy(dx, dy),
+              deltaX,
+              deltaY
+            );
+          }
+        }
+
+        await new Promise((r) => setTimeout(r, 300));
+
+        const scrollPos = await page.evaluate(() => ({
+          x: window.scrollX,
+          y: window.scrollY,
+          maxY: document.body.scrollHeight - window.innerHeight,
+        }));
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Scrolled ${args.toBottom ? "to bottom" : args.toTop ? "to top" : `${args.direction} ${args.amount}px`}. Position: ${Math.round(scrollPos.y)}/${Math.round(scrollPos.maxY)}px`,
+            },
+          ],
+          sessionId: args.sessionId,
+        };
+      } catch (error) {
+        throw new ExtractionError(
+          `Scroll failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "evaluate_script",
+    "Execute arbitrary JavaScript in the browser page context. Returns the result as JSON.",
+    {
+      sessionId: z.string().describe("Browser session ID"),
+      script: z
+        .string()
+        .describe(
+          "JavaScript code to execute. Use 'return' for expression results, e.g. 'return document.title'"
+        ),
+    },
+    async (args) => {
+      try {
+        const page = await browserManager.getSession(args.sessionId);
+        if (!page) {
+          throw new SessionError(`Session ${args.sessionId} not found`, args.sessionId);
+        }
+
+        const result = await page.evaluate((code: string) => {
+          const fn = new Function(code);
+          return fn();
+        }, args.script);
+
+        const serialized = JSON.stringify(result, null, 2) ?? "undefined";
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: serialized,
+            },
+          ],
+          sessionId: args.sessionId,
+        };
+      } catch (error) {
+        throw new ExtractionError(
+          `Script execution failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "get_page_info",
+    "Get current page information: URL, title, viewport size, cookie count, and form elements summary.",
+    {
+      sessionId: z.string().describe("Browser session ID"),
+    },
+    async (args) => {
+      try {
+        const page = await browserManager.getSession(args.sessionId);
+        if (!page) {
+          throw new SessionError(`Session ${args.sessionId} not found`, args.sessionId);
+        }
+
+        const info = await page.evaluate(() => {
+          const forms = document.querySelectorAll("form");
+          const inputs = document.querySelectorAll("input, textarea, select");
+          const buttons = document.querySelectorAll("button, input[type='submit'], [role='button']");
+
+          return {
+            url: window.location.href,
+            title: document.title,
+            viewport: {
+              width: window.innerWidth,
+              height: window.innerHeight,
+            },
+            scroll: {
+              x: window.scrollX,
+              y: window.scrollY,
+              maxX: document.body.scrollWidth - window.innerWidth,
+              maxY: document.body.scrollHeight - window.innerHeight,
+            },
+            forms: forms.length,
+            inputs: Array.from(inputs).map((el: any) => ({
+              tag: el.tagName.toLowerCase(),
+              type: el.type || el.tagName.toLowerCase(),
+              name: el.name || "",
+              id: el.id || "",
+              placeholder: el.placeholder || "",
+              value: el.type === "password" ? "***" : (el.value || "").substring(0, 100),
+              required: el.required || false,
+              selector: el.id
+                ? `#${el.id}`
+                : el.name
+                  ? `[name="${el.name}"]`
+                  : `${el.tagName.toLowerCase()}[type="${el.type}"]`,
+            })),
+            buttons: Array.from(buttons).map((el: any) => ({
+              tag: el.tagName.toLowerCase(),
+              text: (el.textContent || "").trim().substring(0, 50),
+              type: el.type || "",
+              id: el.id || "",
+              selector: el.id
+                ? `#${el.id}`
+                : el.className
+                  ? `.${el.className.split(" ")[0]}`
+                  : el.tagName.toLowerCase(),
+            })),
+          };
+        });
+
+        const summary = [
+          `URL: ${info.url}`,
+          `Title: ${info.title}`,
+          `Viewport: ${info.viewport.width}x${info.viewport.height}`,
+          `Scroll: ${info.scroll.y}/${info.scroll.maxY}px`,
+          `Forms: ${info.forms}`,
+          `Inputs (${info.inputs.length}):`,
+          ...info.inputs.map(
+            (i: any) =>
+              `  - ${i.type} ${i.name || i.id || "(unnamed)"} [${i.selector}]${i.placeholder ? ` placeholder="${i.placeholder}"` : ""}${i.required ? " (required)" : ""}`
+          ),
+          `Buttons (${info.buttons.length}):`,
+          ...info.buttons.map(
+            (b: any) =>
+              `  - "${b.text}" [${b.selector}]${b.type ? ` type=${b.type}` : ""}`
+          ),
+        ].join("\n");
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: summary,
+            },
+          ],
+          sessionId: args.sessionId,
+          pageInfo: info,
+        };
+      } catch (error) {
+        throw new ExtractionError(
+          `Page info failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  );
 }

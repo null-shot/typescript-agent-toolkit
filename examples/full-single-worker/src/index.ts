@@ -46,6 +46,13 @@ export {
   VoiceMcpServer,
 } from "./mcp-servers";
 
+// Additional MCP servers imported from workspace packages
+export { KvMcpServer } from "kv-mcp";
+export { AnalyticsMcpServer } from "analytics-mcp";
+export { VectorizeMcpServer } from "vectorize-mcp";
+export { BrowserMcpServerSqlV2 as BrowserMcpServer } from "browser-mcp-example";
+export { EmailMcpServer } from "email-mcp";
+
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
@@ -175,75 +182,50 @@ app.get("/api/agents", (c) => {
 
 // List available MCP tools
 app.get("/api/tools", (c) => {
+  const emailActive = !!(c.env as any).EMAIL_MCP;
   return c.json({
-    mcpServers: ["TODO_MCP", "EXPENSE_MCP", "ENV_VARIABLE_MCP", "SECRET_MCP", "IMAGE_MCP", "VOICE_MCP"],
-    tools: [
-      // Todo MCP
-      {
-        name: "create_todo",
-        description: "Create a new todo item",
-        source: "TODO_MCP",
-      },
-      {
-        name: "list_todos",
-        description: "List all todo items",
-        source: "TODO_MCP",
-      },
-      {
-        name: "complete_todo",
-        description: "Mark a todo as completed",
-        source: "TODO_MCP",
-      },
-      {
-        name: "delete_todo",
-        description: "Delete a todo item",
-        source: "TODO_MCP",
-      },
-      // Expense MCP
-      {
-        name: "submit_expense",
-        description: "Submit a new expense",
-        source: "EXPENSE_MCP",
-      },
-      {
-        name: "approve_expense",
-        description: "Approve an expense",
-        source: "EXPENSE_MCP",
-      },
-      {
-        name: "reject_expense",
-        description: "Reject an expense",
-        source: "EXPENSE_MCP",
-      },
-      {
-        name: "list_expenses",
-        description: "List all expenses",
-        source: "EXPENSE_MCP",
-      },
-      // Env Variable MCP
-      {
-        name: "greeting",
-        description: "Send a greeting",
-        source: "ENV_VARIABLE_MCP",
-      },
-      // Secret MCP
-      {
-        name: "guess_number",
-        description: "Guess the secret number",
-        source: "SECRET_MCP",
-      },
-      {
-        name: "generate_image",
-        description: "Generate an image from a text description",
-        source: "IMAGE_MCP",
-      },
-      {
-        name: "text_to_speech",
-        description: "Convert text to speech audio",
-        source: "VOICE_MCP",
-      },
+    mcpServers: [
+      { name: "TODO_MCP", status: "active" },
+      { name: "EXPENSE_MCP", status: "active" },
+      { name: "ENV_VARIABLE_MCP", status: "active" },
+      { name: "SECRET_MCP", status: "active" },
+      { name: "IMAGE_MCP", status: "active" },
+      { name: "VOICE_MCP", status: "active" },
+      { name: "KV_MCP", status: "active" },
+      { name: "ANALYTICS_MCP", status: "active" },
+      { name: "VECTORIZE_MCP", status: "active" },
+      { name: "BROWSER_MCP", status: "active" },
+      { name: "EMAIL_MCP", status: emailActive ? "active" : "inactive", note: emailActive ? undefined : "Requires custom domain with Cloudflare Email Routing" },
     ],
-    total: 12,
+    tools: [
+      { name: "create_todo", description: "Create a new todo item", source: "TODO_MCP" },
+      { name: "list_todos", description: "List all todo items", source: "TODO_MCP" },
+      { name: "complete_todo", description: "Mark a todo as completed", source: "TODO_MCP" },
+      { name: "delete_todo", description: "Delete a todo item", source: "TODO_MCP" },
+      { name: "submit_expense", description: "Submit a new expense", source: "EXPENSE_MCP" },
+      { name: "approve_expense", description: "Approve an expense", source: "EXPENSE_MCP" },
+      { name: "reject_expense", description: "Reject an expense", source: "EXPENSE_MCP" },
+      { name: "list_expenses", description: "List all expenses", source: "EXPENSE_MCP" },
+      { name: "greeting", description: "Send a greeting", source: "ENV_VARIABLE_MCP" },
+      { name: "guess_number", description: "Guess the secret number", source: "SECRET_MCP" },
+      { name: "generate_image", description: "Generate an image from a text description", source: "IMAGE_MCP" },
+      { name: "text_to_speech", description: "Convert text to speech audio", source: "VOICE_MCP" },
+      { name: "is_prime", description: "Check if a number is prime (cached in KV)", source: "KV_MCP" },
+      { name: "track_metric", description: "Track a single data point", source: "ANALYTICS_MCP" },
+      { name: "query_analytics", description: "Execute SQL queries on analytics data", source: "ANALYTICS_MCP" },
+      { name: "get_metrics_summary", description: "Get aggregated metrics summary", source: "ANALYTICS_MCP" },
+      { name: "add_document", description: "Add document with auto-embedding", source: "VECTORIZE_MCP" },
+      { name: "search_similar", description: "Semantic search across documents", source: "VECTORIZE_MCP" },
+      { name: "navigate", description: "Navigate to a URL in a browser session", source: "BROWSER_MCP" },
+      { name: "screenshot", description: "Take a screenshot of the current page", source: "BROWSER_MCP" },
+      { name: "extract_text", description: "Extract text from page using CSS selectors", source: "BROWSER_MCP" },
+      { name: "extract_links", description: "Extract links from page with filtering", source: "BROWSER_MCP" },
+      { name: "send_email", description: "Send email via Cloudflare Email Workers", source: "EMAIL_MCP", status: emailActive ? "active" : "inactive" },
+      { name: "list_emails", description: "List emails with search and pagination", source: "EMAIL_MCP", status: emailActive ? "active" : "inactive" },
+      { name: "get_email", description: "Get a single email by ID", source: "EMAIL_MCP", status: emailActive ? "active" : "inactive" },
+      { name: "create_test_email", description: "Create a test email record", source: "EMAIL_MCP", status: emailActive ? "active" : "inactive" },
+    ],
+    total: emailActive ? 26 : 22,
   });
 });
 
@@ -266,13 +248,75 @@ setupDashboardRoutes(app, (env) => getPlaygroundConfig(env).agents, {
 // Telegram routes (test, health, webhook)
 setupTelegramRoutes(app);
 
+// Debug: simulate /generate AI flow using EXACT same code path as the Telegram webhook
+app.post("/api/debug/generate", async (c) => {
+  const { sendAgentMessage } = await import("../../telegram-bot-agent/src/utils/agent-client");
+  const { createDoAgentFetcher } = await import("../../telegram-bot-agent/src/utils/do-agent-fetcher");
+  const { getKnowledgeBasePrompt } = await import("../../telegram-bot-agent/src/utils/knowledge-base");
+  const { getPromptForFormat, parseFormatHints } = await import("../../telegram-bot-agent/src/utils/prompts");
+
+  const body = await c.req.json<{ topic?: string }>().catch(() => ({}));
+  const topic = body.topic || "null craft breading";
+
+  const results: Record<string, unknown> = { topic };
+
+  // Build EXACT same prompt as /generate does
+  const { cleanTopic, format } = parseFormatHints(topic);
+  const imagesEnabled = (await c.env.SESSIONS?.get("setting:image_with_posts")) !== "false";
+  const prompt = getPromptForFormat(format, !!c.env.AI, imagesEnabled);
+  const kbPrompt = await getKnowledgeBasePrompt(c.env.SESSIONS);
+  const systemPrompt = kbPrompt + "\n\n" + prompt + cleanTopic;
+
+  results.promptInfo = {
+    format,
+    cleanTopic,
+    imagesEnabled,
+    kbPromptLen: kbPrompt.length,
+    promptLen: prompt.length,
+    systemPromptLen: systemPrompt.length,
+    systemPromptPreview: systemPrompt.substring(0, 300),
+  };
+
+  const messages = [
+    { role: "system" as const, content: systemPrompt },
+    { role: "user" as const, content: `Write a post about: ${cleanTopic}` },
+  ];
+
+  // Test 1: Agent via createInternalAgentService (EXACT webhook path)
+  const agentService = createDoAgentFetcher(c.env.SIMPLE_PROMPT_AGENT);
+  const sessionId = `debug_gen_${Date.now()}`;
+  try {
+    const t0 = Date.now();
+    const text = await sendAgentMessage("", sessionId, messages, agentService);
+    results.agent = { ok: true, duration: Date.now() - t0, length: text.length, preview: text.substring(0, 300) };
+  } catch (e) {
+    results.agent = { ok: false, error: e instanceof Error ? `${e.message}\n${e.stack}` : String(e) };
+  }
+
+  // Test 2: Workers AI directly (fallback path)
+  if (c.env.AI) {
+    try {
+      const t0 = Date.now();
+      const result = (await c.env.AI.run(
+        "@cf/meta/llama-3.3-70b-instruct-fp8-fast" as any,
+        { messages } as any,
+      )) as { response?: string };
+      results.workersAI = { ok: true, duration: Date.now() - t0, length: result.response?.length ?? 0, preview: result.response?.substring(0, 300) };
+    } catch (e) {
+      results.workersAI = { ok: false, error: e instanceof Error ? `${e.message}\n${e.stack}` : String(e) };
+    }
+  }
+
+  return c.json(results);
+});
+
 // KV debug — helps diagnose SESSIONS binding issues
 app.get("/api/debug/kv", async (c) => {
   if (!c.env.SESSIONS) {
     return c.json({ ok: false, error: "SESSIONS binding not configured" });
   }
   try {
-    await c.env.SESSIONS.get("_health_check");
+    await c.env.SESSIONS.get("_health_check", { cacheTtl: 300 });
     return c.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -290,7 +334,7 @@ app.get("/health", async (c) => {
   // KV Store
   try {
     if (c.env.SESSIONS) {
-      await c.env.SESSIONS.get("_health_check");
+      await c.env.SESSIONS.get("_health_check", { cacheTtl: 300 });
       checks.kv = { status: "ok" };
     } else {
       checks.kv = {
@@ -340,7 +384,7 @@ app.get("/health", async (c) => {
 
   // Telegram Bot
   if (c.env.TELEGRAM_BOT_TOKEN) {
-    const pinExists = await c.env.SESSIONS?.get(DASHBOARD_PIN_KEY);
+    const pinExists = await c.env.SESSIONS?.get(DASHBOARD_PIN_KEY, { cacheTtl: 60 });
     checks.telegram = {
       status: "ok",
       detail: pinExists
@@ -473,6 +517,34 @@ app.all("/mcp/image/*", async (c) => {
 
 app.all("/mcp/voice/*", async (c) => {
   return routeToMcp(c, c.env.VOICE_MCP);
+});
+
+app.all("/mcp/kv/*", async (c) => {
+  return routeToMcp(c, (c.env as any).KV_MCP);
+});
+
+app.all("/mcp/analytics/*", async (c) => {
+  return routeToMcp(c, (c.env as any).ANALYTICS_MCP);
+});
+
+app.all("/mcp/vectorize/*", async (c) => {
+  return routeToMcp(c, (c.env as any).VECTORIZE_MCP);
+});
+
+app.all("/mcp/browser/*", async (c) => {
+  return routeToMcp(c, (c.env as any).BROWSER_MCP);
+});
+
+// Email MCP — inactive until custom domain + email routing is configured
+app.all("/mcp/email/*", async (c) => {
+  const binding = (c.env as any).EMAIL_MCP;
+  if (!binding) {
+    return c.json(
+      { error: "EMAIL_MCP is inactive. Requires a custom domain with Cloudflare Email Routing configured." },
+      503,
+    );
+  }
+  return routeToMcp(c, binding);
 });
 
 // ============================================================================

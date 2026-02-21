@@ -11,7 +11,7 @@ import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createXai } from "@ai-sdk/xai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createWorkersAI } from "workers-ai-provider";
-import { generateText, LanguageModel, type Provider, stepCountIs } from "ai";
+import { LanguageModel, type Provider } from "ai";
 
 import {
   AiSdkAgent,
@@ -112,7 +112,7 @@ export class SimplePromptAgent extends AiSdkAgent<any> {
       );
       const workersAi = createWorkersAI({ binding: env.AI! });
       model = workersAi(
-        (env.MODEL_ID || "@cf/meta/llama-3.3-70b-instruct-fp8-fast") as any,
+        (env.MODEL_ID || "@cf/meta/llama-3.1-8b-instruct-fast") as any,
       );
       provider = workersAi as unknown as Provider;
     }
@@ -262,7 +262,7 @@ export class DependentAgent extends AiSdkAgent<any> {
       );
       const workersAi = createWorkersAI({ binding: env.AI! });
       model = workersAi(
-        (env.MODEL_ID || "@cf/meta/llama-3.3-70b-instruct-fp8-fast") as any,
+        (env.MODEL_ID || "@cf/meta/llama-3.1-8b-instruct-fast") as any,
       );
       provider = workersAi as unknown as Provider;
     }
@@ -281,103 +281,58 @@ export class DependentAgent extends AiSdkAgent<any> {
     );
 
     try {
-      let tools: any = undefined;
-      for (const mw of (this as any).middleware || []) {
-        if (mw.transformStreamTextTools) {
-          tools = mw.transformStreamTextTools(tools);
-        }
-      }
-
-      const toolCount = tools ? Object.keys(tools).length : 0;
-      console.log(
-        `[DependentAgent] Using generateText with ${toolCount} tools`,
-      );
-
       const result = await withRetry(() =>
-        generateText({
-          model: (this as any).model,
-          messages: messages.messages as any,
-          tools,
-          system: `You are a helpful AI assistant with access to tools.
-When the user asks you to generate an image, use the generate_image tool.
-When the user asks to generate voice/audio or speak something, use the text_to_speech tool.
-For all other requests, reply with plain text.
+        this.streamTextWithMessages(sessionId, messages.messages, {
+          system: `You are a helpful AI assistant with access to many tools.
+Always use the appropriate tool when the user's request matches one of your available tools.
+After using a tool, describe the result clearly to the user.
+For image generation, include the image URL as markdown: ![image](/media/image/ID)
+For voice/audio, include a link to the audio file.
 Do NOT output JSON for tool calls — use the tools directly.`,
-          stopWhen: stepCountIs(1),
+          maxSteps: 2,
         }),
       );
 
-      let responseText = result.text || "";
-      let imageMarkdown = "";
-      let explicitAudioUrl = "";
+      // Collect full text (awaits all steps including tool calls)
+      const fullText = await result.text;
+      const steps = await result.steps;
 
-      for (const step of result.steps) {
-        if (step.toolResults?.length) {
-          for (const tr of step.toolResults) {
-            const trAny = tr as any;
-            const toolName = trAny.toolName;
-            const raw =
-              typeof (trAny.result ?? trAny.output) === "string"
-                ? (trAny.result ?? trAny.output)
-                : JSON.stringify(trAny.result ?? trAny.output);
+      let responseText = fullText;
 
-            let text = raw;
-            try {
-              const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed)) {
-                text = parsed
-                  .filter((p: any) => p.type === "text")
-                  .map((p: any) => p.text)
-                  .join("\n");
-              } else if (parsed.content) {
-                text = parsed.content
-                  .filter((p: any) => p.type === "text")
-                  .map((p: any) => p.text)
-                  .join("\n");
+      // If model called tools but didn't generate follow-up text, build response from tool results
+      if (!responseText && steps.length > 0) {
+        const parts: string[] = [];
+        for (const step of steps) {
+          if (step.text) parts.push(step.text);
+          if (step.toolResults) {
+            for (const tr of step.toolResults as any[]) {
+              const raw = typeof tr.result === "string" ? tr.result : JSON.stringify(tr.result);
+              try {
+                const parsed = JSON.parse(raw);
+                const text = Array.isArray(parsed)
+                  ? parsed.filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n")
+                  : parsed.content
+                    ? parsed.content.filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n")
+                    : raw;
+                parts.push(text);
+              } catch {
+                parts.push(raw);
               }
-            } catch {
-              /* not JSON */
-            }
-
-            if (toolName === "generate_image") {
-              const urlMatch = text.match(/URL:\s*(\/media\/image\/[^\s]+)/);
-              if (urlMatch) {
-                imageMarkdown += `\n\n![image](${urlMatch[1]})`;
-              }
-            } else if (toolName === "text_to_speech") {
-              const urlMatch = text.match(/\/media\/audio\/[a-f0-9-]+/);
-              if (urlMatch) {
-                explicitAudioUrl = urlMatch[0];
-              }
-            } else {
-              responseText += "\n" + text;
             }
           }
         }
+        responseText = parts.join("\n").trim();
       }
 
-      const trimmed = responseText.trim();
-      if (trimmed) {
-        responseText = trimmed + imageMarkdown;
-      } else if (imageMarkdown) {
-        responseText = imageMarkdown.trim();
-      } else if (explicitAudioUrl) {
-        responseText = "Audio generated.";
-      } else {
-        responseText = "No response generated.";
-      }
-
-      const headers: Record<string, string> = {
-        "Content-Type": "text/plain; charset=utf-8",
-        "X-Session-Id": sessionId,
-      };
-      if (explicitAudioUrl) {
-        headers["X-Audio-Url"] = explicitAudioUrl;
-      }
-
-      return new Response(responseText, { status: 200, headers });
+      return new Response(responseText || "No response generated.", {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "X-Session-Id": sessionId,
+        },
+      });
     } catch (error) {
-      console.error("❌ [DependentAgent] Error processing message:", error);
+      console.error("[DependentAgent] Error:", error);
       return new Response(
         `Sorry, I encountered an error: ${error instanceof Error ? error.message : "Unknown error"}`,
         {

@@ -281,7 +281,7 @@ export async function processKanbanRecurringTasks(
           const { cleanTopic: recurringTopic, format: recurringFormat } =
             parseFormatHints(topic);
           const imagesEnabled =
-            (await env.SESSIONS?.get("setting:image_with_posts")) !== "false";
+            (await env.SESSIONS?.get("setting:image_with_posts", { cacheTtl: 300 })) !== "false";
 
           // For recurring "auto" format, always use MULTIFORMAT prompt to enable
           // format rotation (text/photo/voice/poll) instead of defaulting to photo-only
@@ -307,29 +307,30 @@ export async function processKanbanRecurringTasks(
 
           const uniquenessHint =
             recurringFormat === "poll"
-              ? `\n\nThis is poll #${task.runCount + 1} in a recurring series. The topic may contain example polls — treat them as inspiration for theme and style ONLY. Invent a completely NEW question with NEW options. Never repeat a previous poll.`
+              ? `\n\nThis is poll #${task.runCount + 1} in a recurring series. The topic may contain example polls — treat them as inspiration for theme and style ONLY. Invent a completely NEW question with NEW options. The poll should feel connected to the recent posts — ask about something that naturally follows from the series narrative.`
               : recurringFormat === "voice"
-                ? `\n\nThis is voice message #${task.runCount + 1} in a recurring series. Continue and develop the narrative — build on what was said before.`
+                ? `\n\nThis is voice message #${task.runCount + 1} in a narrative series. Continue and develop the story — build on what was said before. Reference previous points. The listener should feel like this is the next episode, not a random standalone piece.`
                 : recurringFormat === "auto"
-                  ? `\n\nThis is post #${task.runCount + 1} in an ongoing series. You are building a connected narrative — each post develops the same thread of thought across different formats (text, voice, photo, poll). Pick a DIFFERENT format from the most recent post. If you choose voice, continue the spoken narrative. All formats should feel like episodes in a series.`
-                  : `\n\nThis is post #${task.runCount + 1} in a recurring series. Each post MUST be completely different from all previous ones.`;
+                  ? `\n\nThis is episode #${task.runCount + 1} in an ongoing narrative series. You are telling a STORY across posts — each one advances the conversation. Pick a DIFFERENT format from the most recent post. All posts should feel like chapters: the reader who followed from the start should see clear progression. Reference or build on previous content.`
+                  : `\n\nThis is episode #${task.runCount + 1} in a narrative series. Build on what came before — each post should advance the story. Do NOT write a generic standalone post. Reference previous content and push the narrative forward.`;
 
           const contentMessages = [
             {
               role: "system" as const,
               content:
-                basePrompt +
-                recurringTopic +
                 kbPrompt +
                 uniquenessHint +
-                historyPrompt,
+                historyPrompt +
+                "\n\n" +
+                basePrompt +
+                recurringTopic,
             },
             {
               role: "user" as const,
               content:
                 recurringFormat === "poll"
-                  ? `Create a new, original poll inspired by this theme: ${recurringTopic}`
-                  : `Write a new post about: ${topic}`,
+                  ? `Create a new, original poll inspired by this theme: ${recurringTopic}. Use facts from the Knowledge Base.`
+                  : `Write a new post about: ${recurringTopic}. Ground it in specific details from the Knowledge Base.`,
             },
           ];
 
@@ -411,16 +412,31 @@ export async function processKanbanRecurringTasks(
               });
               log.info("Wrapped plain-text as voice post", { taskId: task.id });
             } else if (recurringFormat === "auto") {
-              // For auto format, rotate: check recent history to pick a different format
+              // Smart format rotation based on actual history
               const recentHistory = await getPublishedHistory(
                 env.SESSIONS,
                 task.id,
               );
               const lastFormat = recentHistory[0]?.contentType;
-              const useVoice =
-                lastFormat && lastFormat !== "voice" && task.runCount % 3 === 1;
+              const recentFormats = recentHistory
+                .slice(0, 3)
+                .map((h) => h.contentType);
 
-              if (useVoice) {
+              // Pick the format that's been used least recently
+              const formatOrder = ["text", "voice", "photo", "poll"] as const;
+              type Fmt = (typeof formatOrder)[number];
+              let nextFormat: Fmt = "text";
+              if (lastFormat) {
+                const candidates = formatOrder.filter(
+                  (f) => f !== lastFormat && f !== "poll",
+                );
+                nextFormat =
+                  candidates.find((f) => !recentFormats.includes(f)) ||
+                  candidates[0] ||
+                  "text";
+              }
+
+              if (nextFormat === "voice") {
                 content = JSON.stringify({
                   type: "voice",
                   text: content,
@@ -429,7 +445,10 @@ export async function processKanbanRecurringTasks(
                 log.info("Wrapped plain-text as voice post (auto rotation)", {
                   taskId: task.id,
                 });
-              } else if (imagesEnabled) {
+              } else if (
+                nextFormat === "photo" &&
+                imagesEnabled
+              ) {
                 const keyWords = content
                   .replace(/[^\p{L}\p{N}\s]/gu, " ")
                   .split(/\s+/)
@@ -443,10 +462,11 @@ export async function processKanbanRecurringTasks(
                   imagePrompt: imagePromptText,
                   caption,
                 });
-                log.info("Wrapped plain-text AI response as image post", {
+                log.info("Wrapped plain-text as photo post (auto rotation)", {
                   taskId: task.id,
                 });
               }
+              // else: keep as plain text (type "text")
             }
           }
         } else {

@@ -57,6 +57,29 @@
         "name": "VOICE_MCP",
         "class_name": "VoiceMcpServer",
       },
+      // New MCP Servers
+      {
+        "name": "KV_MCP",
+        "class_name": "KvMcpServer",
+      },
+      {
+        "name": "ANALYTICS_MCP",
+        "class_name": "AnalyticsMcpServer",
+      },
+      {
+        "name": "VECTORIZE_MCP",
+        "class_name": "VectorizeMcpServer",
+      },
+      {
+        "name": "BROWSER_MCP",
+        "class_name": "BrowserMcpServer",
+      },
+      // EMAIL_MCP — inactive until custom domain + Cloudflare Email Routing is set up
+      // Uncomment when iworker.online (or another domain) is verified and email routing enabled:
+      // {
+      //   "name": "EMAIL_MCP",
+      //   "class_name": "EmailMcpServer",
+      // },
     ],
   },
   // Migrations for Durable Objects
@@ -76,20 +99,73 @@
       "tag": "v2",
       "new_sqlite_classes": ["ImageMcpServer", "VoiceMcpServer"],
     },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": [
+        "KvMcpServer",
+        "AnalyticsMcpServer",
+        "VectorizeMcpServer",
+        "BrowserMcpServer",
+      ],
+    },
+    // Uncomment when enabling EMAIL_MCP:
+    // {
+    //   "tag": "v4",
+    //   "new_sqlite_classes": ["EmailMcpServer"],
+    // },
   ],
-  // Workers AI (for LLM inference)
+  // Workers AI (for LLM inference, image gen, embeddings)
   "ai": {
     "binding": "AI",
   },
-  // Vectorize (optional, uncomment if you need RAG / long-term memory)
-  // "vectorize": [
+  // KV namespace (for KvMcpServer)
+  "kv_namespaces": [
+    {
+      "binding": "EXAMPLE_KV",
+      "id": "bbb6c2576b4b453e87fd29fa83682594",
+    },
+  ],
+  // Analytics Engine (for AnalyticsMcpServer)
+  "analytics_engine_datasets": [
+    {
+      "binding": "ANALYTICS",
+      "dataset": "single_worker_analytics",
+    },
+  ],
+  // Vectorize (for VectorizeMcpServer + optional chat memory)
+  "vectorize": [
+    {
+      "binding": "VECTORIZE_INDEX",
+      "index_name": "single-worker-semantic-search",
+    },
+    // Uncomment for RAG / long-term memory:
+    // {
+    //   "binding": "CHAT_MEMORY",
+    //   "index_name": "single-worker-memory",
+    // },
+  ],
+  // Browser Rendering (for BrowserMcpServer)
+  "browser": {
+    "binding": "MYBROWSER",
+  },
+  // R2 bucket (for BrowserMcpServer page cache) — optional
+  // Enable R2 in CF Dashboard first, then uncomment:
+  // "r2_buckets": [
   //   {
-  //     "binding": "CHAT_MEMORY",
-  //     "index_name": "single-worker-memory",
+  //     "binding": "CACHE_BUCKET",
+  //     "bucket_name": "single-worker-browser-cache",
   //   },
   // ],
   // Observability
   "observability": {
     "enabled": true,
   },
+  // EMAIL_MCP — uncomment when domain is verified + email routing enabled:
+  // "send_email": {
+  //   "name": "SEND_EMAIL",
+  //   "destination_address": "your-address@iworker.online",
+  // },
+  // Add to "vars" above when enabling:
+  //   "MAIL_FROM": "noreply@iworker.online",
+  //   "ALLOWED_RECIPIENTS": "@iworker.online",
 }

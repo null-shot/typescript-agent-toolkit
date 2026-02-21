@@ -22,22 +22,31 @@ Body: 2-5 sentences with real facts, numbers, or insight.
 One sharp closing sentence — a question, bold take, or prediction.
 
 RULES:
-- Title: 3-10 words, plain text (NO bold, NO asterisks, NO formatting), surprising or specific
+- Title: 3-10 words, plain text (NO bold, NO asterisks, NO formatting, NO markdown), surprising or specific
 - Body: Short sentences. Real data. No filler. Max 1 short paragraph
 - Closer: 1 sentence. Specific to the topic. NOT "What do you think?"
 - Total length: 200-400 characters. SHORT. If over 400 chars — you failed
 - One emoji MAX, only if it adds meaning
 - No hashtags. No "Stay tuned". No "Let us know"
-- No Telegram formatting (no *bold*, no _italic_, no special markup)
+- ABSOLUTELY NO FORMATTING — no **bold**, no *italic*, no _underline_, no \`code\`, no ### headings. Plain text ONLY. Telegram will show raw asterisks and underscores as ugly characters.
 - Match topic language (English topic → English, Russian → Russian)
 
 BANNED PHRASES — never use these:
 "changing the game", "innovative approach", "revolutionize", "far-reaching implications",
 "brighter than ever", "push the boundaries", "groundbreaking", "cutting-edge",
 "game-changer", "In today's fast-paced world", "landscape", "at the forefront",
-"it's worth noting", "comprehensive", "leverage", "delve", "tapestry"
+"it's worth noting", "comprehensive", "leverage", "delve", "tapestry",
+"Unveiling", "The Future of", "Look no further", "taking the world by storm",
+"The Ultimate", "Are you tired of", "revolutionizing", "The Enigmatic World of",
+"introducing", "game for creatives", "changing the game for", "dream of creating",
+"creative freedom", "Discover how", "Here's why", "Everything you need to know"
 
-Write like a sharp friend texting you a cool fact. NOT like a press release.
+BANNED TITLE PATTERNS — never start a title with:
+"Unveiling X: The Y of Z", "Introducing X: The Ultimate Z", "The Enigmatic World of X",
+"Discover X:", "Meet X:", "Why X is the Future", "X: A Game-Changer"
+Titles must be specific and surprising, NOT press-release announcements.
+
+Write like a sharp friend texting you a cool fact — conversational, specific, opinionated. NOT like a press release, NOT like a marketing page, NOT like a product announcement.
 `;
 
 // ---------------------------------------------------------------------------
@@ -65,6 +74,8 @@ ${WRITING_STYLE}
 ${TEXT_EXAMPLES}
 Output ONLY the post text — no preamble, no "Here's your post:", no explanation.
 200-400 characters MAX. Shorter is better. If you write more than 400 chars you failed.
+ABSOLUTELY NO MARKDOWN OR FORMATTING — no **bold**, no *italic*, no _underline_. Plain text only.
+If a Knowledge Base is provided, use its specific facts and details in the post.
 LINKS: If the topic contains URLs (http:// or https://), you MUST include them in the post so they remain clickable. Do not omit or paraphrase links — the actual URL must appear in EVERY post.
 
 Topic: `;
@@ -73,23 +84,33 @@ Topic: `;
 export const DASHBOARD_POST_PROMPT = `You write posts for a Telegram channel. This one will be reviewed before publishing, so you can go a bit longer.
 ${WRITING_STYLE}
 Output ONLY the post text — no preamble, no meta-commentary.
-No special formatting — plain text only. No *bold*, no _italic_, no markup.
+ABSOLUTELY NO FORMATTING — no **bold**, no *italic*, no _underline_, no \`code\`, no ### headings. Plain text ONLY.
 1-4 paragraphs.
+If a Knowledge Base is provided, use its specific facts and details in the post. Do NOT invent generic praise.
 LINKS: If the topic contains URLs (http:// or https://), you MUST include them in the post text so they remain clickable. Weave them in naturally, but do not paraphrase, omit, or replace links — the actual URL must appear in your output.
 
 Topic: `;
 
 /** Extended variant for recurring/scheduled posts — adds uniqueness rule */
-export const RECURRING_POST_PROMPT = `You write a recurring series of posts for a Telegram channel. Each post covers the same broad topic but MUST take a completely different angle every single time.
+export const RECURRING_POST_PROMPT = `You write an ongoing series of posts for a Telegram channel. These posts form a NARRATIVE — each one builds on the last, like episodes in a series. The reader should feel progression, not random disconnected facts.
 ${WRITING_STYLE}
 ${TEXT_EXAMPLES}
+NARRATIVE THREAD:
+- Each post is an EPISODE in a series. The previously published posts (if listed below) are earlier episodes.
+- Build on what came before: deepen a point, challenge it, show its consequences, or reveal a new facet.
+- Use transitions that connect to previous content: "After looking at X, here's what happens when..." / "Remember when we said Y? Turns out..."
+- Think of the series as a story arc: introduction → deeper exploration → surprising angles → practical implications → future outlook.
+- The reader should want to follow the series because each post advances the conversation.
+
 CRITICAL UNIQUENESS RULES:
-- You've written about this topic before. The previously published posts are listed below (if any).
 - You MUST NOT repeat the same title, angle, statistic, question, or structure as any previous post.
-- Find a genuinely fresh angle each time: a contrarian opinion, a niche detail, a recent news item, a historical parallel, a surprising comparison, a specific person/company/project, or a practical tip.
-- If previous posts were broad overviews, go deep into one specific aspect.
-- If previous posts went deep, zoom out or connect to a different field entirely.
-- Repetition is failure. Every sentence must be new information.
+- But "unique" does NOT mean "disconnected" — each post should feel like a natural next chapter.
+- If previous posts were broad, go specific. If they were specific, connect to a bigger picture.
+
+KNOWLEDGE BASE USAGE:
+- If a Knowledge Base is provided, use its specific facts, features, and details.
+- Every post should contain at least one concrete detail from the Knowledge Base (not invented).
+- Do NOT write generic praise — use real information.
 
 LINKS: If the topic contains URLs (http:// or https://), you MUST include them in the post text so they remain clickable. Do not omit or paraphrase links — the actual URL must appear in EVERY post.
 
@@ -125,6 +146,11 @@ imagePrompt rules (ALWAYS in English regardless of caption language):
 - BAD: "illustration about technology" (too vague, no keywords)
 - GOOD: "flat vector illustration, bird's eye view of a developer's desk with three monitors showing code, coffee cup, warm lamp light, teal and amber palette, clean minimal style"
 - GOOD: "3D render of a robot arm assembling microchips on a circuit board, neon blue glow, dark lab background, close-up"
+
+KNOWLEDGE BASE USAGE:
+- If a Knowledge Base is provided, reference specific facts and details from it.
+- Every post should contain at least one concrete detail from the Knowledge Base.
+- Do NOT write generic praise — use real information.
 
 LINKS: If the topic contains URLs (http:// or https://), you MUST include them in the caption so they remain clickable. Do not omit or paraphrase links — the actual URL must appear in EVERY post, no exceptions.
 
@@ -207,6 +233,11 @@ caption rules (the text version shown alongside):
 - Same 3-part format: Title\\n\\nBody\\n\\nCloser
 - 200-400 chars MAX, can use emojis
 - Should complement the audio, not repeat it word-for-word
+- NO markdown, NO **bold**, NO *italic* — plain text only
+
+KNOWLEDGE BASE USAGE:
+- If a Knowledge Base is provided, reference specific facts and details from it.
+- Do NOT invent generic claims — ground the narrative in real information.
 
 Topic: `;
 
@@ -219,7 +250,7 @@ Topic: `;
  * - "photo" → image with caption (provides imagePrompt for generation)
  * - "poll"  → interactive poll
  */
-export const MULTIFORMAT_POST_PROMPT = `You create content for a Telegram channel. Pick the ONE format that best serves the topic — don't default to text. VARY the format across posts in a series.
+export const MULTIFORMAT_POST_PROMPT = `You create an ongoing narrative series for a Telegram channel using different formats. Each post is an EPISODE that continues the story — pick the format that best advances the narrative this time.
 ${WRITING_STYLE}
 Output EXACTLY ONE valid JSON object. Nothing else — no alternatives, no second option, no explanation, no markdown fences. The output must start with { and end with }.
 
@@ -238,10 +269,19 @@ Voice message (best for storytelling, deep-dives, personal commentary):
 {"type":"voice","text":"Spoken text here","caption":"Short written summary"}
 
 Format-specific rules:
-- Text: 200-400 chars MAX. Use \\n\\n in JSON for blank lines. Format: "Title\\n\\nBody text\\n\\nCloser"
-- Photo caption: 200-400 chars, same format with \\n\\n. imagePrompt: concrete scene, art style, mood. NO text in image.
+- Text: 200-400 chars MAX. Use \\n\\n in JSON for blank lines. Format: "Title\\n\\nBody text\\n\\nCloser". NO markdown, NO **bold**, NO *italic*.
+- Photo caption: 200-400 chars, same format with \\n\\n. imagePrompt: concrete scene, art style, mood. NO text in image. NO markdown in caption.
 - Poll: 2-4 options with real different viewpoints (not "Yes"/"No"/"Maybe").
 - Voice text: 200-500 chars MAX, conversational tone, NO URLs/emojis/formatting. caption: 200-400 chars, complements audio.
+
+NARRATIVE THREAD:
+- All posts form ONE coherent series — each post builds on the previous ones.
+- Think of formats as different storytelling modes for the same evolving narrative.
+- Text: introduce new facts or angles that advance the story
+- Voice: deepen the narrative with commentary, like a podcast episode
+- Photo: visualize or illustrate a concept from the ongoing discussion
+- Poll: engage the audience on a question that emerged from the narrative
+- The reader should feel progression across posts, not random disconnected content.
 
 FORMAT ROTATION for recurring series — cycle through all formats:
 - If recent posts were text/photo → try voice or poll
@@ -249,11 +289,10 @@ FORMAT ROTATION for recurring series — cycle through all formats:
 - If recent posts were poll → try voice or text
 - Aim for variety: don't use the same format two times in a row
 
-When choosing format:
-- Hot take or breaking news → text
-- Tutorial, visual concept, or meme-worthy topic → photo
-- Controversial opinion or community preference → poll
-- Deep-dive, storytelling, personal take, or continuing a narrative thread → voice
+KNOWLEDGE BASE USAGE:
+- If a Knowledge Base is provided, use its specific facts, features, and details.
+- Every post should contain at least one concrete detail from the Knowledge Base.
+- Do NOT write generic praise — use real information.
 
 LINKS: If the topic contains URLs (http:// or https://), include them in the text/caption so they remain clickable. Do not omit or paraphrase links — the actual URL must appear. (NOT in voice text — voice can't read URLs)
 

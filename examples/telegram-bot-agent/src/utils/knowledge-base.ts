@@ -35,7 +35,7 @@ export async function loadBotProfile(
 	kv: KVNamespace,
 ): Promise<BotProfileSettings | null> {
 	try {
-		const raw = await kv.get("bot_profile_settings");
+		const raw = await kv.get("bot_profile_settings", { cacheTtl: 300 });
 		if (!raw) return null;
 		return JSON.parse(raw) as BotProfileSettings;
 	} catch {
@@ -55,7 +55,7 @@ export function formatKnowledgeBase(kb?: KnowledgeBase | null): string {
 	const parts: string[] = [];
 
 	if (kb.instructions) {
-		parts.push(`=== Knowledge Base ===\n${kb.instructions}`);
+		parts.push(kb.instructions);
 	}
 
 	const urls: string[] = [];
@@ -67,7 +67,19 @@ export function formatKnowledgeBase(kb?: KnowledgeBase | null): string {
 	}
 
 	if (parts.length === 0) return "";
-	return "\n\n" + parts.join("\n\n");
+
+	return `
+
+=== KNOWLEDGE BASE (PRIMARY SOURCE — USE THIS) ===
+${parts.join("\n\n")}
+
+KNOWLEDGE BASE RULES:
+- Draw specific facts, features, names, and details from the Knowledge Base above
+- Every post MUST reference at least one concrete detail from the Knowledge Base
+- Do NOT invent generic claims — use the real information provided
+- If the Knowledge Base mentions specific products, features, or stats — use them
+- The Knowledge Base is your source of truth — prefer it over generic AI knowledge
+`;
 }
 
 /**
