@@ -43,8 +43,9 @@ export function detectProjectType(localDir: string): string {
 }
 
 /**
- * Download skill files from the platform and write them into
- * `<localDir>/.claude/skills/<skill-name>/SKILL.md`.
+ * Download all skill files from the platform and write them into
+ * `<localDir>/.claude/skills/<skill-name>/` preserving the full subfolder
+ * structure (e.g. references/, rules/).
  *
  * Skills are placed in `.claude/` which is in the ignore list, so they are
  * never uploaded back to the CodeBox. They exist only for the local developer's
@@ -72,20 +73,29 @@ export async function injectSkills(
   const skillsDir = path.join(localDir, ".claude", "skills");
 
   for (const skill of skillsResponse.skills) {
-    try {
-      // Download the SKILL.md content
-      const response = await fetch(skill.path);
-      if (!response.ok) continue;
+    let skillFileCount = 0;
 
-      const content = await response.text();
-      if (!content.trim()) continue;
+    for (const skillFile of skill.files) {
+      try {
+        const response = await fetch(skillFile.url);
+        if (!response.ok) continue;
 
-      const destDir = path.join(skillsDir, skill.name);
-      fs.mkdirSync(destDir, { recursive: true });
-      fs.writeFileSync(path.join(destDir, "SKILL.md"), content, "utf-8");
+        const content = await response.text();
+        if (!content.trim()) continue;
+
+        // Resolve the destination path, preserving subfolders
+        const destPath = path.join(skillsDir, skill.name, skillFile.relativePath);
+        const destDir = path.dirname(destPath);
+        fs.mkdirSync(destDir, { recursive: true });
+        fs.writeFileSync(destPath, content, "utf-8");
+        skillFileCount++;
+      } catch {
+        // Best-effort: skip failed files
+      }
+    }
+
+    if (skillFileCount > 0) {
       injected.push(skill.name);
-    } catch {
-      // Best-effort: skip failed skills
     }
   }
 

@@ -38,10 +38,17 @@ export interface WsUrlsResponse {
   mode: 'direct' | 'proxy';
 }
 
+export interface SkillFile {
+  /** Relative path within the skill folder (e.g. "SKILL.md", "references/limits.md") */
+  relativePath: string;
+  /** Full URL to fetch this file */
+  url: string;
+}
+
 export interface SkillInfo {
   name: string;
-  /** Absolute URL to download SKILL.md from */
-  path: string;
+  /** All files belonging to this skill, including subfolders */
+  files: SkillFile[];
 }
 
 export interface SkillsResponse {
