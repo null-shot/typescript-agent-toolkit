@@ -679,6 +679,53 @@ async function runDev(
   });
 }
 
+function buildHtmlPage(type: "success" | "error", title: string, body: string): string {
+  const color = type === "success" ? "#22c55e" : "#ef4444";
+  const icon = type === "success" ? "✅" : "❌";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${title} - Nullshot CLI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a0f;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 2.5rem;
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+    }
+    .icon { font-size: 3rem; margin-bottom: 1rem; }
+    h1 { font-size: 1.5rem; font-weight: 700; color: ${color}; margin-bottom: 0.75rem; }
+    p { font-size: 0.95rem; color: #94a3b8; line-height: 1.6; }
+    .brand { margin-top: 2rem; font-size: 0.8rem; color: #475569; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">${icon}</div>
+    <h1>${title}</h1>
+    <p>${body}</p>
+    <p class="brand">Nullshot CLI</p>
+  </div>
+</body>
+</html>`;
+}
+
 function handleError(error: unknown): void {
   if (error instanceof CLIError) {
     logger.error(chalk.red(`❌ ${error.message}`));
@@ -760,54 +807,143 @@ program
 program
   .command("login")
   .description("Authenticate with Nullshot")
-  .option("--token <token>", "Authentication token from nullshot.ai")
   .option("--status", "Show current authentication status")
-  .option("--api-url <url>", "API base URL override")
-  .action(async (options: { token?: string; status?: boolean; apiUrl?: string }) => {
+  .option("--api-url <url>", "API base URL override (default: https://nullshot.ai)")
+  .action(async (options: { status?: boolean; apiUrl?: string }) => {
     if (options.status) {
       const creds = AuthManager.getCredentials();
       if (creds) {
-        logger.info(chalk.green("Authenticated"));
+        logger.info(chalk.green("✅ Authenticated"));
         logger.info(`  User: ${creds.userName || creds.userId}`);
         logger.info(`  Email: ${creds.email || "N/A"}`);
         logger.info(`  Expires: ${new Date(creds.expiresAt).toLocaleDateString()}`);
       } else {
-        logger.info(chalk.yellow("Not authenticated. Run `nullshot login --token <token>` to authenticate."));
+        logger.info(chalk.yellow("Not authenticated. Run `nullshot login` to authenticate."));
       }
       return;
     }
 
-    if (!options.token) {
-      logger.info(chalk.cyan("To authenticate, open your Jam room on nullshot.ai,"));
-      logger.info(chalk.cyan('click the "Code" button, and copy the command shown.'));
-      logger.info("");
-      logger.info(chalk.dim("Or run: nullshot login --token <your-token>"));
-      return;
-    }
+    const apiBase = options.apiUrl || "https://nullshot.ai";
 
-    const spinner = ora("Authenticating...").start();
+    const { createServer } = await import("node:http");
+    const { exec } = await import("node:child_process");
 
-    try {
-      const client = new NullshotApiClient({ baseUrl: options.apiUrl });
-      const result = await client.authenticateWithToken(options.token);
-
-      AuthManager.saveCredentials({
-        sessionToken: result.sessionToken,
-        userId: result.userId,
-        userName: result.userName,
-        email: result.email,
-        expiresAt: result.expiresAt,
-        baseUrl: options.apiUrl || "https://nullshot.ai",
+    const findFreePort = (): Promise<number> =>
+      new Promise((resolve, reject) => {
+        const srv = createServer();
+        srv.listen(0, "127.0.0.1", () => {
+          const addr = srv.address() as { port: number };
+          srv.close(() => resolve(addr.port));
+        });
+        srv.on("error", reject);
       });
 
-      spinner.succeed(chalk.green(`Authenticated as ${result.userName || result.email || result.userId}`));
-    } catch (error) {
-      spinner.fail(chalk.red("Authentication failed"));
-      if (error instanceof Error) {
-        logger.error(error.message);
-      }
-      process.exit(1);
-    }
+    const openBrowser = (url: string): void => {
+      const platform = process.platform;
+      const cmd =
+        platform === "darwin"
+          ? `open "${url}"`
+          : platform === "win32"
+            ? `start "" "${url}"`
+            : `xdg-open "${url}"`;
+      exec(cmd, () => {});
+    };
+
+    const port = await findFreePort();
+    const state = crypto.randomUUID();
+    const redirectUri = `http://127.0.0.1:${port}/callback`;
+    const authUrl = `${apiBase}/auth/cli?redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
+
+    logger.info("");
+    logger.info(chalk.cyan("Opening browser for authentication..."));
+    logger.info(chalk.dim(`If browser doesn't open automatically, visit:`));
+    logger.info(chalk.dim(`  ${authUrl}`));
+    logger.info("");
+
+    openBrowser(authUrl);
+
+    const spinner = ora("Waiting for browser authentication...").start();
+
+    await new Promise<void>((resolve, reject) => {
+      const server = createServer((req, res) => {
+        if (!req.url) {
+          res.writeHead(400);
+          res.end("Bad request");
+          return;
+        }
+
+        const reqUrl = new URL(req.url, `http://127.0.0.1:${port}`);
+
+        if (reqUrl.pathname !== "/callback") {
+          res.writeHead(404);
+          res.end("Not found");
+          return;
+        }
+
+        const returnedState = reqUrl.searchParams.get("state");
+        const token = reqUrl.searchParams.get("token");
+
+        if (returnedState !== state) {
+          res.writeHead(400, { "Content-Type": "text/html" });
+          res.end(buildHtmlPage("error", "Authentication Failed", "Invalid state parameter."));
+          server.close();
+          reject(new Error("State mismatch - possible security issue, please try again."));
+          return;
+        }
+
+        if (!token) {
+          res.writeHead(400, { "Content-Type": "text/html" });
+          res.end(buildHtmlPage("error", "Authentication Failed", "No token received."));
+          server.close();
+          reject(new Error("No token received from authentication server."));
+          return;
+        }
+
+        const userId = reqUrl.searchParams.get("userId") || "";
+        const userName = reqUrl.searchParams.get("userName") || null;
+        const email = reqUrl.searchParams.get("email") || null;
+        const expiresAt = parseInt(reqUrl.searchParams.get("expiresAt") || "0", 10);
+
+        AuthManager.saveCredentials({
+          sessionToken: token,
+          userId,
+          userName,
+          email,
+          expiresAt: expiresAt || Date.now() + 30 * 24 * 60 * 60 * 1000,
+          baseUrl: apiBase,
+        });
+
+        const displayName = userName || email || userId;
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(
+          buildHtmlPage(
+            "success",
+            "Authenticated!",
+            `You're now logged in as <strong>${displayName}</strong>.<br/>You can close this tab and return to your terminal.`,
+          ),
+        );
+
+        server.close(() => resolve());
+      });
+
+      server.listen(port, "127.0.0.1");
+
+      const timeout = setTimeout(
+        () => {
+          server.close();
+          reject(new Error("Authentication timed out after 5 minutes."));
+        },
+        5 * 60 * 1000,
+      );
+
+      server.on("close", () => clearTimeout(timeout));
+      server.on("error", reject);
+    });
+
+    const creds = AuthManager.getCredentials();
+    spinner.succeed(
+      chalk.green(`Authenticated as ${creds?.userName || creds?.email || creds?.userId || "unknown"}`),
+    );
   });
 
 program
@@ -830,7 +966,7 @@ program
   .action(async (roomIdArg?: string, options?: { apiUrl?: string }) => {
     const creds = AuthManager.getCredentials();
     if (!creds) {
-      logger.error(chalk.red("Not authenticated. Run `nullshot login --token <token>` first."));
+      logger.error(chalk.red("Not authenticated. Run `nullshot login` first."));
       process.exit(1);
     }
 
@@ -873,55 +1009,72 @@ program
           process.exit(1);
         }
       } else {
-        // Interactive mode: select a Jam
-        const jamChoices = jams.map((j) => ({
-          title: `${j.name} (${j.rooms.length} room${j.rooms.length !== 1 ? "s" : ""})`,
-          value: j.id,
-        }));
+        // Interactive mode with back-navigation: loop until a room is selected or user cancels
+        const BACK = "__back__";
 
-        const jamAnswer = await prompts({
-          type: "select",
-          name: "jamId",
-          message: "Select a Jam",
-          choices: jamChoices,
-        });
+        selectionLoop: while (true) {
+          // Step 1: Select a Jam
+          const jamChoices = jams.map((j) => ({
+            title: `${j.name} (${j.rooms.length} room${j.rooms.length !== 1 ? "s" : ""})`,
+            value: j.id,
+          }));
 
-        if (!jamAnswer.jamId) {
-          logger.info("Cancelled.");
-          return;
+          const jamAnswer = await prompts({
+            type: "select",
+            name: "jamId",
+            message: "Select a Jam",
+            choices: jamChoices,
+          });
+
+          if (!jamAnswer.jamId) {
+            logger.info("Cancelled.");
+            return;
+          }
+
+          const selectedJam = jams.find((j) => j.id === jamAnswer.jamId)!;
+
+          if (selectedJam.rooms.length === 0) {
+            logger.info(chalk.yellow(`No rooms in "${selectedJam.name}". Create one on nullshot.ai first.`));
+            continue selectionLoop;
+          }
+
+          // Step 2: Select a Room (with back option)
+          const roomChoices = [
+            {
+              title: chalk.dim("← Back to Jams"),
+              value: BACK,
+            },
+            ...selectedJam.rooms.map((r) => ({
+              title: `${r.title} (${r.state || "unknown"})`,
+              description: r.branchName,
+              value: r.id,
+            })),
+          ];
+
+          const roomAnswer = await prompts({
+            type: "select",
+            name: "roomId",
+            message: `Rooms in "${selectedJam.name}"`,
+            choices: roomChoices,
+          });
+
+          if (!roomAnswer.roomId) {
+            logger.info("Cancelled.");
+            return;
+          }
+
+          if (roomAnswer.roomId === BACK) {
+            continue selectionLoop;
+          }
+
+          const selectedRoom = selectedJam.rooms.find((r) => r.id === roomAnswer.roomId)!;
+          targetJamId = selectedJam.id;
+          targetJamName = selectedJam.name;
+          targetRoomId = selectedRoom.id;
+          targetRoomTitle = selectedRoom.title;
+          targetPreviewUrl = selectedRoom.previewUrl;
+          break selectionLoop;
         }
-
-        const selectedJam = jams.find((j) => j.id === jamAnswer.jamId)!;
-        targetJamId = selectedJam.id;
-        targetJamName = selectedJam.name;
-
-        if (selectedJam.rooms.length === 0) {
-          logger.info(chalk.yellow("No rooms in this Jam. Create one on nullshot.ai first."));
-          return;
-        }
-
-        const roomChoices = selectedJam.rooms.map((r) => ({
-          title: `${r.title} (${r.state || "unknown"})`,
-          description: r.branchName,
-          value: r.id,
-        }));
-
-        const roomAnswer = await prompts({
-          type: "select",
-          name: "roomId",
-          message: "Select a Room",
-          choices: roomChoices,
-        });
-
-        if (!roomAnswer.roomId) {
-          logger.info("Cancelled.");
-          return;
-        }
-
-        const selectedRoom = selectedJam.rooms.find((r) => r.id === roomAnswer.roomId)!;
-        targetRoomId = selectedRoom.id;
-        targetRoomTitle = selectedRoom.title;
-        targetPreviewUrl = selectedRoom.previewUrl;
       }
 
       // Start syncing

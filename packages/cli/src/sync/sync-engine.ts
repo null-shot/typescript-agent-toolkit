@@ -85,17 +85,22 @@ export class SyncEngine {
       fs.writeFileSync(ignoreFilePath, DEFAULT_NULLSHOT_IGNORE_CONTENT, "utf-8");
     }
 
-    // Allow callers to inject additional files (e.g. skill files) before the
-    // watcher is started so those files are never treated as local changes.
-    if (this.opts.onAfterInitialSync) {
-      const injected = await this.opts.onAfterInitialSync(localDir);
-      if (injected.length > 0) {
-        onStatus?.(chalk.dim(`Injected ${injected.length} skill file(s) into .claude/`));
-      }
-    }
-
     onStatus?.(`Starting file watcher...`);
     this.startFileWatcher();
+
+    // Inject skill files in the background so they don't delay sync startup.
+    // Chokidar ignores .claude/ by default so these files won't be uploaded.
+    if (this.opts.onAfterInitialSync) {
+      this.opts.onAfterInitialSync(localDir)
+        .then((injected) => {
+          if (injected.length > 0) {
+            onStatus?.(chalk.dim(`Injected ${injected.length} skill file(s) into .claude/`));
+          }
+        })
+        .catch(() => {
+          // skills injection is best-effort, never block or crash
+        });
+    }
 
     onStatus?.(`Connecting to Jam session...`);
     this.connectJam();
@@ -448,22 +453,31 @@ export class SyncEngine {
         this.markAgentEditing();
       }
 
-      // Fetch the file content and write locally
-      this.sendCodeboxRequest("cli:read_file", { path: filePath })
-        .then((response) => {
-          if (response.success && response.content !== undefined) {
-            const localPath = path.join(this.opts.localDir, filePath);
-            const dir = path.dirname(localPath);
-            if (!fs.existsSync(dir)) {
-              fs.mkdirSync(dir, { recursive: true });
+      const writeContent = (content: string) => {
+        const localPath = path.join(this.opts.localDir, filePath);
+        const dir = path.dirname(localPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        this.remotePausedPaths.add(filePath);
+        fs.writeFileSync(localPath, content, "utf-8");
+        setTimeout(() => this.remotePausedPaths.delete(filePath), 500);
+        this.opts.onStatus?.(chalk.dim(`↓ ${filePath}`));
+      };
+
+      // If the broadcast already includes content (zero extra round-trip), use it directly.
+      // Otherwise fall back to an explicit cli:read_file request.
+      if (typeof msg.content === "string") {
+        writeContent(msg.content);
+      } else {
+        this.sendCodeboxRequest("cli:read_file", { path: filePath })
+          .then((response) => {
+            if (response.success && response.content !== undefined) {
+              writeContent(response.content as string);
             }
-            this.remotePausedPaths.add(filePath);
-            fs.writeFileSync(localPath, response.content as string, "utf-8");
-            setTimeout(() => this.remotePausedPaths.delete(filePath), 500);
-            this.opts.onStatus?.(chalk.dim(`↓ ${filePath}`));
-          }
-        })
-        .catch(() => {});
+          })
+          .catch(() => {});
+      }
     }
 
     if (msg.type === "file:deleted") {
