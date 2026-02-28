@@ -11,7 +11,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     # Only run this job if it's in the original repository, not in forks
-    if: github.repository == 'null-shot/typescript-agent-framework'
+    if: github.repository == 'null-shot/typescript-agent-toolkit'
     permissions:
       contents: write
       packages: write
