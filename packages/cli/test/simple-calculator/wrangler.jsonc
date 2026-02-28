@@ -1,0 +1,26 @@
+{
+	// Cloudflare Workers configuration
+	// See: https://developers.cloudflare.com/workers/wrangler/configuration/
+	// NOTE: Use the wrangler_config tool to modify bindings - do not edit directly
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "app",
+	"main": "./src/worker/index.ts",
+	"compatibility_date": "2026-01-11",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true
+		},
+		"traces": {
+			"enabled": true
+		}
+	},
+	"upload_source_maps": true,
+	"assets": {
+		"directory": "./dist/client",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application"
+	}
+}

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>{{APP_NAME}}</title>
+		<style>
+			/* Minimal critical CSS - avoid unlayered resets that override Tailwind @layer utilities */
+			:root {
+				color-scheme: dark;
+				--background: hsl(240 10% 4%);
+				--foreground: hsl(200 10% 95%);
+			}
+			body {
+				background-color: var(--background);
+				color: var(--foreground);
+				min-height: 100vh;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="root"></div>
+		<script type="module" src="/src/react-app/main.tsx"></script>
+	</body>
+</html>

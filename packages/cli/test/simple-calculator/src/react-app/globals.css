@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+/* Dark theme by default */
+:root {
+	color-scheme: dark;
+
+	/* Theme colors - customize these for your app */
+	--background: hsl(240 10% 4%);
+	--foreground: hsl(200 10% 95%);
+	--card: hsl(240 10% 6%);
+	--card-foreground: hsl(200 10% 95%);
+	--primary: hsl(190 70% 50%);
+	--primary-foreground: hsl(240 10% 4%);
+	--secondary: hsl(175 50% 35%);
+	--secondary-foreground: hsl(200 10% 95%);
+	--muted: hsl(240 10% 12%);
+	--muted-foreground: hsl(200 5% 50%);
+	--accent: hsl(150 60% 45%);
+	--accent-foreground: hsl(240 10% 4%);
+	--destructive: hsl(0 70% 50%);
+	--destructive-foreground: hsl(0 0% 98%);
+	--border: hsl(240 10% 18%);
+	--input: hsl(240 10% 10%);
+	--ring: hsl(190 70% 50%);
+	--radius: 0.5rem;
+}
+
+/* Tailwind v4 Theme - Maps CSS vars to utility classes */
+@theme inline {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+
+	--radius-sm: calc(var(--radius) - 2px);
+	--radius-md: var(--radius);
+	--radius-lg: calc(var(--radius) + 2px);
+
+	--font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+	--font-mono: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+/* Base styles */
+@layer base {
+	* {
+		border-color: var(--border);
+	}
+
+	body {
+		margin: 0;
+		background-color: var(--background);
+		color: var(--foreground);
+		font-family: var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	code {
+		font-family: var(--font-mono);
+	}
+}

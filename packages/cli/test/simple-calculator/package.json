@@ -1,0 +1,32 @@
+{
+  "name": "test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "npm run build && vite preview",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.90.20",
+    "hono": "4.11.5",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-router-dom": "7.13.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.15.3",
+    "@cloudflare/workers-types": "4.20260122.0",
+    "@tailwindcss/vite": "4.1.18",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.1.2",
+    "tailwindcss": "4.1.18",
+    "typescript": "5.8.3",
+    "vite": "7.3.0",
+    "wrangler": "4.59.3"
+  }
+}

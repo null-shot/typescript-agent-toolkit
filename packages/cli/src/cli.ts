@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
+import prompts from "prompts";
 import { ConfigManager } from "./config/config-manager.js";
 import { PackageManager } from "./package/package-manager.js";
 import { WranglerManager } from "./wrangler/wrangler-manager.js";
@@ -13,6 +14,10 @@ import { CLIError } from "./utils/errors.js";
 import { Logger } from "./utils/logger.js";
 import { TemplateManager } from "./template/template-manager.js";
 import { InputManager } from "./template/input-manager.js";
+import { AuthManager } from "./auth/auth-manager.js";
+import { NullshotApiClient } from "./api/nullshot-api-client.js";
+import { SyncEngine } from "./sync/sync-engine.js";
+import { injectSkills } from "./skills/inject-skills.js";
 import type {
   MCPConfig,
   InstallOptions,
@@ -748,9 +753,298 @@ program
     }
   });
 
+// =============================================
+// Authentication commands
+// =============================================
+
+program
+  .command("login")
+  .description("Authenticate with Nullshot")
+  .option("--token <token>", "Authentication token from nullshot.ai")
+  .option("--status", "Show current authentication status")
+  .option("--api-url <url>", "API base URL override")
+  .action(async (options: { token?: string; status?: boolean; apiUrl?: string }) => {
+    if (options.status) {
+      const creds = AuthManager.getCredentials();
+      if (creds) {
+        logger.info(chalk.green("Authenticated"));
+        logger.info(`  User: ${creds.userName || creds.userId}`);
+        logger.info(`  Email: ${creds.email || "N/A"}`);
+        logger.info(`  Expires: ${new Date(creds.expiresAt).toLocaleDateString()}`);
+      } else {
+        logger.info(chalk.yellow("Not authenticated. Run `nullshot login --token <token>` to authenticate."));
+      }
+      return;
+    }
+
+    if (!options.token) {
+      logger.info(chalk.cyan("To authenticate, open your Jam room on nullshot.ai,"));
+      logger.info(chalk.cyan('click the "Code" button, and copy the command shown.'));
+      logger.info("");
+      logger.info(chalk.dim("Or run: nullshot login --token <your-token>"));
+      return;
+    }
+
+    const spinner = ora("Authenticating...").start();
+
+    try {
+      const client = new NullshotApiClient({ baseUrl: options.apiUrl });
+      const result = await client.authenticateWithToken(options.token);
+
+      AuthManager.saveCredentials({
+        sessionToken: result.sessionToken,
+        userId: result.userId,
+        userName: result.userName,
+        email: result.email,
+        expiresAt: result.expiresAt,
+        baseUrl: options.apiUrl || "https://nullshot.ai",
+      });
+
+      spinner.succeed(chalk.green(`Authenticated as ${result.userName || result.email || result.userId}`));
+    } catch (error) {
+      spinner.fail(chalk.red("Authentication failed"));
+      if (error instanceof Error) {
+        logger.error(error.message);
+      }
+      process.exit(1);
+    }
+  });
+
+program
+  .command("logout")
+  .description("Clear stored Nullshot credentials")
+  .action(() => {
+    AuthManager.clearCredentials();
+    logger.info(chalk.green("Logged out successfully."));
+  });
+
+// =============================================
+// Jam sync command
+// =============================================
+
+program
+  .command("jam")
+  .description("Sync files with a Nullshot Jam room")
+  .argument("[room-id]", "Room ID to sync with directly")
+  .option("--api-url <url>", "API base URL override")
+  .action(async (roomIdArg?: string, options?: { apiUrl?: string }) => {
+    const creds = AuthManager.getCredentials();
+    if (!creds) {
+      logger.error(chalk.red("Not authenticated. Run `nullshot login --token <token>` first."));
+      process.exit(1);
+    }
+
+    const client = new NullshotApiClient({
+      baseUrl: options?.apiUrl || creds.baseUrl,
+      sessionToken: creds.sessionToken,
+    });
+
+    const spinner = ora("Fetching your Jams...").start();
+
+    let targetRoomId = roomIdArg;
+    let targetJamName: string | undefined;
+    let targetRoomTitle: string | undefined;
+    let targetJamId: string | undefined;
+    let targetPreviewUrl: string | undefined;
+
+    try {
+      const { jams } = await client.listJams();
+      spinner.stop();
+
+      if (jams.length === 0) {
+        logger.info(chalk.yellow("No Jams found. Create one at nullshot.ai first."));
+        return;
+      }
+
+      if (targetRoomId) {
+        // Direct mode: find the room
+        for (const jam of jams) {
+          const room = jam.rooms.find((r) => r.id === targetRoomId);
+          if (room) {
+            targetJamName = jam.name;
+            targetRoomTitle = room.title;
+            targetJamId = jam.id;
+            targetPreviewUrl = room.previewUrl;
+            break;
+          }
+        }
+        if (!targetJamName) {
+          logger.error(chalk.red(`Room ${targetRoomId} not found or you don't have access.`));
+          process.exit(1);
+        }
+      } else {
+        // Interactive mode: select a Jam
+        const jamChoices = jams.map((j) => ({
+          title: `${j.name} (${j.rooms.length} room${j.rooms.length !== 1 ? "s" : ""})`,
+          value: j.id,
+        }));
+
+        const jamAnswer = await prompts({
+          type: "select",
+          name: "jamId",
+          message: "Select a Jam",
+          choices: jamChoices,
+        });
+
+        if (!jamAnswer.jamId) {
+          logger.info("Cancelled.");
+          return;
+        }
+
+        const selectedJam = jams.find((j) => j.id === jamAnswer.jamId)!;
+        targetJamId = selectedJam.id;
+        targetJamName = selectedJam.name;
+
+        if (selectedJam.rooms.length === 0) {
+          logger.info(chalk.yellow("No rooms in this Jam. Create one on nullshot.ai first."));
+          return;
+        }
+
+        const roomChoices = selectedJam.rooms.map((r) => ({
+          title: `${r.title} (${r.state || "unknown"})`,
+          description: r.branchName,
+          value: r.id,
+        }));
+
+        const roomAnswer = await prompts({
+          type: "select",
+          name: "roomId",
+          message: "Select a Room",
+          choices: roomChoices,
+        });
+
+        if (!roomAnswer.roomId) {
+          logger.info("Cancelled.");
+          return;
+        }
+
+        const selectedRoom = selectedJam.rooms.find((r) => r.id === roomAnswer.roomId)!;
+        targetRoomId = selectedRoom.id;
+        targetRoomTitle = selectedRoom.title;
+        targetPreviewUrl = selectedRoom.previewUrl;
+      }
+
+      // Start syncing
+      const safeName = (targetJamName || "jam").replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase();
+      const safeRoom = (targetRoomTitle || "room").replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase();
+      const localDir = `./${safeName}/${safeRoom}`;
+
+      logger.info("");
+      logger.info(chalk.cyan(`Jam:  ${targetJamName}`));
+      logger.info(chalk.cyan(`Room: ${targetRoomTitle}`));
+      logger.info(chalk.cyan(`Dir:  ${localDir}`));
+      if (targetPreviewUrl) {
+        logger.info(chalk.cyan(`Preview: ${targetPreviewUrl}`));
+      }
+      logger.info("");
+
+      // Fetch environment-appropriate WebSocket URLs from the server.
+      // In local dev next dev cannot proxy WS upgrades, so the server returns
+      // direct URLs to the playground/jams workers. In production it returns
+      // the website-proxied URLs where JWT is validated at the edge.
+      const wsUrlsSpinner = ora("Resolving connection URLs...").start();
+      let codeboxWsUrl: string;
+      let jamWsUrl: string;
+      try {
+        const wsUrls = await client.getWsUrls({
+          roomId: targetRoomId!,
+          jamId: targetJamId!,
+          userId: creds.userId,
+          userName: creds.userName || "",
+        });
+        codeboxWsUrl = wsUrls.codeboxWsUrl;
+        jamWsUrl = wsUrls.jamWsUrl;
+        wsUrlsSpinner.stop();
+      } catch (err) {
+        wsUrlsSpinner.stop();
+        throw err;
+      }
+
+      const printAgentWarning = () => {
+        process.stdout.write(
+          chalk.yellow("\n⚠  Agent is editing remotely — conflicts may occur. Press S + Enter to stop agents.\n\n")
+        );
+      };
+      const clearAgentWarning = () => {
+        process.stdout.write(chalk.green("✓  Agent finished editing.\n\n"));
+      };
+
+      const engine = new SyncEngine({
+        localDir,
+        codeboxWsUrl,
+        jamWsUrl,
+        userId: creds.userId,
+        userName: creds.userName,
+        sessionToken: creds.sessionToken,
+        onStatus: (msg) => logger.info(msg),
+        onError: (err) => logger.error(chalk.red(err.message)),
+        onAgentEditingChange: (isEditing) => {
+          if (isEditing) printAgentWarning();
+          else clearAgentWarning();
+        },
+        onAfterInitialSync: async (dir) => {
+          return injectSkills(dir, client, targetRoomId!, targetJamId!);
+        },
+      });
+
+      // Handle graceful shutdown
+      let shuttingDown = false;
+      const shutdown = async (reason?: string) => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        if (reason) logger.info(chalk.yellow(`\n${reason}`));
+        logger.info(chalk.yellow("Ending session..."));
+        await engine.stop();
+        logger.info(chalk.dim(`Local files kept at: ${localDir}`));
+        process.exit(0);
+      };
+
+      process.on("SIGINT", () => shutdown());
+      process.on("SIGTERM", () => shutdown());
+
+      await engine.start();
+
+      logger.info("");
+      logger.info(chalk.dim("─────────────────────────────────────────"));
+      logger.info(chalk.bold("  Session active. Files syncing in real-time."));
+      logger.info(chalk.dim("  Press Enter to end session."));
+      logger.info(chalk.dim("─────────────────────────────────────────"));
+      logger.info("");
+
+      // Keep alive: read from stdin. Enter = end session, S = stop remote agents.
+      await new Promise<void>((resolve) => {
+        process.stdin.setEncoding("utf-8");
+        process.stdin.resume();
+        process.stdin.on("data", (chunk: string) => {
+          const input = chunk.trim().toLowerCase();
+          if (input === "s") {
+            const displayName = creds.userName || creds.userId;
+            logger.info(chalk.yellow("Stopping remote agents..."));
+            engine.stopRemoteAgents(targetRoomId!, displayName);
+          } else {
+            // Any other input (including bare Enter) ends the session
+            resolve();
+          }
+        });
+      });
+
+      await shutdown("Session ended.");
+    } catch (error) {
+      spinner.stop();
+      if (error instanceof Error) {
+        logger.error(chalk.red(error.message));
+      }
+      process.exit(1);
+    }
+  });
+
 process.on("uncaughtException", (error) => {
   logger.error(`${chalk.red("Uncaught exception:")}, ${error}`);
   process.exit(1);
 });
 
-program.parse();
+// When run via `pnpm dev:run -- login --token=...`, pnpm injects a leading "--" into argv.
+// Commander treats "--" as "end of options", so the rest is parsed as positional args. Strip it.
+const argv = process.argv.slice(2);
+const filtered = argv[0] === "--" ? argv.slice(1) : argv;
+program.parse([process.argv[0] ?? "", process.argv[1] ?? "", ...filtered]);
