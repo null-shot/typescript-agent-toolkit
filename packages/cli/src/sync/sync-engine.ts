@@ -50,7 +50,13 @@ export class SyncEngine {
   private requestIdCounter = 0;
   private pendingRequests: Map<string, PendingRequest> = new Map();
   private recentlySentPaths: Map<string, number> = new Map();
-  private remotePausedPaths: Set<string> = new Set();
+  /**
+   * Hashes of files written from remote. When chokidar fires a change event
+   * for a file we just downloaded, we compare the current content hash against
+   * this map and skip the upload if they match — avoiding the echo-back bug
+   * that a fixed 500ms timeout cannot reliably prevent.
+   */
+  private remoteWrittenHashes: Map<string, string> = new Map();
   private stopped = false;
   private pendingFileSyncEvents: PendingFileSyncEvent[] = [];
   private fileSyncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -300,10 +306,9 @@ export class SyncEngine {
         fs.mkdirSync(dir, { recursive: true });
       }
 
-      // Mark as remotely-paused to prevent echo back to server
-      this.remotePausedPaths.add(file.path);
+      // Record the hash so the file watcher knows not to echo this write back
+      this.remoteWrittenHashes.set(file.path, hashContent(file.content));
       fs.writeFileSync(localPath, file.content, "utf-8");
-      setTimeout(() => this.remotePausedPaths.delete(file.path), 500);
       written++;
     }
 
@@ -318,10 +323,23 @@ export class SyncEngine {
     this.fileWatcher = new FileWatcher(
       this.opts.localDir,
       (change) => {
-        if (this.remotePausedPaths.has(change.relativePath)) return;
-
         if (change.type === "add" || change.type === "change") {
           const content = fs.readFileSync(change.absolutePath, "utf-8");
+
+          // If this file was just written from remote and the content hasn't
+          // changed since, suppress the echo upload.
+          const remoteHash = this.remoteWrittenHashes.get(change.relativePath);
+          if (remoteHash !== undefined) {
+            if (remoteHash === hashContent(content)) {
+              // Content is identical to what we wrote — this is chokidar
+              // reporting our own download. Delete the record and skip.
+              this.remoteWrittenHashes.delete(change.relativePath);
+              return;
+            }
+            // Hash differs — the user actually edited the file after we wrote it.
+            this.remoteWrittenHashes.delete(change.relativePath);
+          }
+
           this.recentlySentPaths.set(change.relativePath, Date.now());
           const isNew = change.type === "add";
           this.sendCodeboxRequest("cli:write_file", {
@@ -334,6 +352,13 @@ export class SyncEngine {
           });
           this.opts.onStatus?.(chalk.dim(`↑ ${change.relativePath}`));
         } else if (change.type === "unlink") {
+          // Suppress echo for remote-initiated deletions
+          const remoteHash = this.remoteWrittenHashes.get(change.relativePath);
+          if (remoteHash === "__deleted__") {
+            this.remoteWrittenHashes.delete(change.relativePath);
+            return;
+          }
+
           this.recentlySentPaths.set(change.relativePath, Date.now());
           this.sendCodeboxRequest("cli:delete_file", {
             path: change.relativePath,
@@ -459,9 +484,9 @@ export class SyncEngine {
         if (!fs.existsSync(dir)) {
           fs.mkdirSync(dir, { recursive: true });
         }
-        this.remotePausedPaths.add(filePath);
+        // Record the hash before writing so the watcher suppresses the echo
+        this.remoteWrittenHashes.set(filePath, hashContent(content));
         fs.writeFileSync(localPath, content, "utf-8");
-        setTimeout(() => this.remotePausedPaths.delete(filePath), 500);
         this.opts.onStatus?.(chalk.dim(`↓ ${filePath}`));
       };
 
@@ -497,9 +522,9 @@ export class SyncEngine {
 
       const localPath = path.join(this.opts.localDir, filePath);
       if (fs.existsSync(localPath)) {
-        this.remotePausedPaths.add(filePath);
+        // Suppress the unlink echo: store a sentinel hash so the watcher skips it
+        this.remoteWrittenHashes.set(filePath, "__deleted__");
         fs.unlinkSync(localPath);
-        setTimeout(() => this.remotePausedPaths.delete(filePath), 500);
         this.opts.onStatus?.(chalk.dim(`↓ ${chalk.red("deleted")} ${filePath}`));
       }
     }
