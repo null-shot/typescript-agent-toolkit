@@ -323,6 +323,13 @@ export class SyncEngine {
     this.fileWatcher = new FileWatcher(
       this.opts.localDir,
       (change) => {
+        // Guard against chokidar passing through ignored paths — glob patterns
+        // using ** do not match hidden directories (e.g. .claude, .cursor)
+        // in micromatch without the dot option, so enforce ignore rules here too.
+        if (shouldIgnorePath(change.relativePath, this.projectIgnorePatterns)) {
+          return;
+        }
+
         if (change.type === "add" || change.type === "change") {
           const content = fs.readFileSync(change.absolutePath, "utf-8");
 

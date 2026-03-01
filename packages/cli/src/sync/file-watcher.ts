@@ -1,6 +1,6 @@
 import { watch, type FSWatcher } from "chokidar";
 import * as path from "node:path";
-import { buildChokidarIgnorePatterns } from "./ignore-patterns.js";
+import { buildChokidarIgnorePatterns, shouldIgnorePath } from "./ignore-patterns.js";
 
 export type FileChangeType = "add" | "change" | "unlink";
 
@@ -33,7 +33,18 @@ export class FileWatcher {
   }
 
   start(): void {
-    const ignored = buildChokidarIgnorePatterns(this.extraIgnorePatterns);
+    const globPatterns = buildChokidarIgnorePatterns(this.extraIgnorePatterns);
+    const extraPatterns = this.extraIgnorePatterns;
+
+    // Chokidar's glob matching (via anymatch/micromatch) does not match hidden
+    // directories like .claude or .cursor when using ** patterns unless the
+    // `dot` option is set. Use a function predicate as the authoritative check
+    // so ignored paths are never watched regardless of glob behaviour.
+    const ignored = (absPath: string) => {
+      if (absPath === this.rootDir) return false;
+      const rel = "/" + path.relative(this.rootDir, absPath).replace(/\\/g, "/");
+      return shouldIgnorePath(rel, extraPatterns);
+    };
 
     this.watcher = watch(this.rootDir, {
       ignored,
