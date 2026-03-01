@@ -33,11 +33,6 @@ jobs:
           cache: "pnpm"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Test npm auth
-        run: |
-          echo "Testing npm auth..."
-          npm whoami || echo "npm auth failed!"
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -94,15 +89,15 @@ jobs:
           # Build again with updated versions
           pnpm build
 
-          # Publish packages
-          pnpm changeset publish
+          # Publish packages with provenance attestation
+          pnpm changeset publish --provenance
 
           # Push the version updates and create tag
           git tag -a "v${MCP_VERSION}" -m "Release v${MCP_VERSION}"
           git push origin main --tags
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
 
       - name: Create GitHub Release
         if: steps.changesets.outputs.has_changesets == 'true' && env.RELEASE_TAG != ''
