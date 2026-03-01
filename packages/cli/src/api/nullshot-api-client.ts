@@ -38,6 +38,67 @@ export interface WsUrlsResponse {
   mode: 'direct' | 'proxy';
 }
 
+export interface WsUrlParams {
+  roomId: string;
+  jamId: string;
+  userId: string;
+  userName: string;
+}
+
+/**
+ * Derive WebSocket URLs directly from the api-url without a server round-trip.
+ *
+ * The website worker cannot proxy WebSocket upgrades through OpenNext API routes,
+ * so for any non-production host we construct direct worker URLs based on the
+ * known URL patterns for each environment:
+ *
+ *   localhost / 127.0.0.1
+ *     → ws://localhost:{8888,8790}/...
+ *
+ *   platform-website-pr-{N}.devaccounts-1password.workers.dev  (PR preview)
+ *     → wss://playground-pr-{N}.devaccounts-1password.workers.dev/...
+ *     → wss://jams-pr-{N}.devaccounts-1password.workers.dev/...
+ *
+ *   Everything else (nullshot.ai, test.nullshot.ai, …)
+ *     → null  (fall back to server-provided URLs via /api/jam/ws-urls)
+ */
+export function deriveWsUrls(apiUrl: string, params: WsUrlParams): WsUrlsResponse | null {
+  const { roomId, jamId, userId, userName } = params;
+  const encodedRoom = encodeURIComponent(roomId);
+  const encodedUser = encodeURIComponent(userName);
+  const baseQuery = `?source=cli&userId=${userId}&userName=${encodedUser}`;
+
+  let host: string;
+  try {
+    host = new URL(apiUrl).hostname;
+  } catch {
+    return null;
+  }
+
+  // Local dev
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return {
+      codeboxWsUrl: `ws://localhost:8888/code-ws/${encodedRoom}${baseQuery}`,
+      jamWsUrl: `ws://localhost:8790/jams/${jamId}/ws?roomId=${roomId}&userId=${userId}&source=cli&userName=${encodedUser}`,
+      mode: 'direct',
+    };
+  }
+
+  // PR preview: platform-website-pr-{N}.devaccounts-1password.workers.dev
+  const prMatch = host.match(/^platform-website-pr-(\d+)\.devaccounts-1password\.workers\.dev$/);
+  if (prMatch) {
+    const pr = prMatch[1];
+    return {
+      codeboxWsUrl: `wss://playground-pr-${pr}.devaccounts-1password.workers.dev/code-ws/${encodedRoom}${baseQuery}`,
+      jamWsUrl: `wss://jams-pr-${pr}.devaccounts-1password.workers.dev/jams/${jamId}/ws?roomId=${roomId}&userId=${userId}&source=cli&userName=${encodedUser}`,
+      mode: 'direct',
+    };
+  }
+
+  // Production / test — use server-provided URLs
+  return null;
+}
+
 export interface SkillFile {
   /** Relative path within the skill folder (e.g. "SKILL.md", "references/limits.md") */
   relativePath: string;
@@ -119,6 +180,12 @@ export class NullshotApiClient {
     if (!this.sessionToken) {
       throw new Error("Not authenticated. Run `nullshot login` first.");
     }
+
+    // Derive URLs directly from the api-url when the environment is known.
+    // This avoids the website trying to proxy WebSocket upgrades, which
+    // OpenNext cannot handle in Next.js API routes.
+    const derived = deriveWsUrls(this.baseUrl, params);
+    if (derived) return derived;
 
     const qs = new URLSearchParams({
       roomId: params.roomId,
