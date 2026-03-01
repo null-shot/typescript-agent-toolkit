@@ -39,12 +39,13 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/xava-labs/typescript-agent-framework.git"
+		"url": "git+https://github.com/null-shot/typescript-agent-toolkit.git",
+		"directory": "packages/mcp"
 	},
 	"bugs": {
-		"url": "https://github.com/xava-labs/typescript-agent-framework/issues"
+		"url": "https://github.com/null-shot/typescript-agent-toolkit/issues"
 	},
-	"homepage": "https://xavalabs.com",
+	"homepage": "https://github.com/null-shot/typescript-agent-toolkit/tree/main/packages/mcp#readme",
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.8.43",
 		"@semantic-release/git": "^10.0.1",

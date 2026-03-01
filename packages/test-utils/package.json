@@ -84,5 +84,14 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/null-shot/typescript-agent-toolkit.git",
+    "directory": "packages/test-utils"
+  },
+  "bugs": {
+    "url": "https://github.com/null-shot/typescript-agent-toolkit/issues"
+  },
+  "homepage": "https://github.com/null-shot/typescript-agent-toolkit/tree/main/packages/test-utils#readme"
 }

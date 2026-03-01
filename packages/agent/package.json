@@ -23,6 +23,15 @@
 		"tools-registry-cli": "./bin/tools-registry-cli.js"
 	},
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/null-shot/typescript-agent-toolkit.git",
+		"directory": "packages/agent"
+	},
+	"bugs": {
+		"url": "https://github.com/null-shot/typescript-agent-toolkit/issues"
+	},
+	"homepage": "https://github.com/null-shot/typescript-agent-toolkit/tree/main/packages/agent#readme",
 	"publishConfig": {
 		"access": "public"
 	},
