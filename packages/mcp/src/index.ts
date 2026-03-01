@@ -8,3 +8,8 @@ export * from './mcp/websocket-transport.js';
 // Export the McpHonoServerDO class
 export { McpHonoServerDO } from './mcp/hono-server';
 export { McpServerDO } from './mcp/server';
+
+// Export OAuth2 authentication functionality
+export * from './auth/types.js';
+export { createAuthMiddleware, getAuthContext, setupAuth } from './auth/index.js';
+export { createPrmHandler, generateProtectedResourceMetadata } from './auth/prm-handler.js';
