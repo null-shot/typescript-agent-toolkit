@@ -1,6 +1,6 @@
 import { watch, type FSWatcher } from "chokidar";
 import * as path from "node:path";
-import { buildChokidarIgnorePatterns, shouldIgnorePath } from "./ignore-patterns.js";
+import { shouldIgnorePath } from "./ignore-patterns.js";
 
 export type FileChangeType = "add" | "change" | "unlink";
 
@@ -33,7 +33,6 @@ export class FileWatcher {
   }
 
   start(): void {
-    const globPatterns = buildChokidarIgnorePatterns(this.extraIgnorePatterns);
     const extraPatterns = this.extraIgnorePatterns;
 
     // Chokidar's glob matching (via anymatch/micromatch) does not match hidden
