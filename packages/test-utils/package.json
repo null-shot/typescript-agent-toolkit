@@ -82,6 +82,11 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/null-shot/typescript-agent-toolkit.git",
+    "directory": "packages/test-utils"
+  },
   "publishConfig": {
     "access": "public"
   },
