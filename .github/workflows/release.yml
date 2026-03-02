@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (build and pack only, no publish or git push)"
+        type: boolean
+        default: true
 
 jobs:
   release:
@@ -58,6 +63,9 @@ jobs:
             echo "No changesets found, skipping release"
           fi
 
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
       - name: Version and Publish
         if: steps.changesets.outputs.has_changesets == 'true'
         run: |
@@ -89,19 +97,28 @@ jobs:
           # Build again with updated versions
           pnpm build
 
-          # Publish packages with provenance attestation
-          pnpm changeset publish --provenance
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "--- DRY RUN: skipping publish and git push ---"
+            # Pack each package to validate contents without publishing
+            for pkg in packages/mcp packages/cli packages/agent packages/test-utils; do
+              echo "Packing $pkg..."
+              (cd $pkg && npm pack --dry-run)
+            done
+          else
+            # Publish packages with provenance attestation
+            pnpm changeset publish --provenance
 
-          # Push the version updates and create tag
-          git tag -a "v${MCP_VERSION}" -m "Release v${MCP_VERSION}"
-          git push origin main --tags
+            # Push the version updates and create tag
+            git tag -a "v${MCP_VERSION}" -m "Release v${MCP_VERSION}"
+            git push origin main --tags
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
 
       - name: Create GitHub Release
-        if: steps.changesets.outputs.has_changesets == 'true' && env.RELEASE_TAG != ''
+        if: steps.changesets.outputs.has_changesets == 'true' && env.RELEASE_TAG != '' && inputs.dry_run != true
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
