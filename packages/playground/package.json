@@ -24,6 +24,11 @@
     "chat",
     "interface"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/null-shot/typescript-agent-toolkit.git",
+    "directory": "packages/playground"
+  },
   "author": "Nullshot",
   "license": "MIT",
   "scripts": {
