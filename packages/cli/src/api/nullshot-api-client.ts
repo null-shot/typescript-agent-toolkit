@@ -59,7 +59,11 @@ export interface WsUrlParams {
  *     → wss://playground-pr-{N}.devaccounts-1password.workers.dev/...
  *     → wss://jams-pr-{N}.devaccounts-1password.workers.dev/...
  *
- *   Everything else (nullshot.ai, test.nullshot.ai, …)
+ *   test.nullshot.ai or dev-*-test.xavalabs.com
+ *     → wss://test.xavalabs.com/code-ws/...
+ *     → wss://jams-test.api.nullshot.ai/jams/.../ws
+ *
+ *   Everything else (nullshot.ai, …)
  *     → null  (fall back to server-provided URLs via /api/jam/ws-urls)
  */
 export function deriveWsUrls(apiUrl: string, params: WsUrlParams): WsUrlsResponse | null {
@@ -95,7 +99,16 @@ export function deriveWsUrls(apiUrl: string, params: WsUrlParams): WsUrlsRespons
     };
   }
 
-  // Production / test — use server-provided URLs
+  // Test environment: playground is at test.xavalabs.com, jams at jams-test.api.nullshot.ai
+  if (host === 'test.nullshot.ai' || /^dev-.*-test\.xavalabs\.com$/.test(host)) {
+    return {
+      codeboxWsUrl: `wss://test.xavalabs.com/code-ws/${encodedRoom}${baseQuery}`,
+      jamWsUrl: `wss://jams-test.api.nullshot.ai/jams/${jamId}/ws?roomId=${roomId}&userId=${userId}&source=cli&userName=${encodedUser}`,
+      mode: 'direct',
+    };
+  }
+
+  // Production — use server-provided URLs via /api/jam/ws-urls
   return null;
 }
 
