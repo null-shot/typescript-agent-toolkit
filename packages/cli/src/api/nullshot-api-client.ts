@@ -313,7 +313,8 @@ export class NullshotApiClient {
       throw new Error(body.error || `Failed to get logs (${response.status})`);
     }
 
-    return (await response.json()) as CompilationLog[];
+    const data = await response.json() as CompilationLog[] | { logs?: CompilationLog[] };
+    return Array.isArray(data) ? data : (data.logs ?? []);
   }
 
   async getMessages(roomId: string): Promise<Message[]> {
@@ -338,7 +339,8 @@ export class NullshotApiClient {
       throw new Error(body.error || `Failed to get messages (${response.status})`);
     }
 
-    return (await response.json()) as Message[];
+    const data = await response.json() as Message[] | { messages?: Message[] };
+    return Array.isArray(data) ? data : (data.messages ?? []);
   }
 
   async getRawMessages(roomId: string): Promise<string> {
