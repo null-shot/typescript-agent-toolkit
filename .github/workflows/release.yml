@@ -108,8 +108,13 @@ jobs:
             # Publish packages with provenance attestation
             pnpm changeset publish --provenance
 
-            # Push the version updates and create tag
-            git tag -a "v${MCP_VERSION}" -m "Release v${MCP_VERSION}"
+            # Push the version updates and create tag (skip if tag already exists)
+            TAG_NAME="v${MCP_VERSION}"
+            if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+              echo "Tag $TAG_NAME already exists, skipping tag creation"
+            else
+              git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+            fi
             git push origin main --tags
           fi
         env:
