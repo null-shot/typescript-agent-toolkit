@@ -1,5 +1,11 @@
 # @nullshot/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- d48a7d0: Add Jam sync with login, ignore list, skills injection, and hash-based incremental sync support.
+
 ## 0.2.5
 
 ### Patch Changes
