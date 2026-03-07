@@ -130,6 +130,35 @@ export interface SkillsResponse {
   detected: string;
 }
 
+export interface CompilationLog {
+  id: string;
+  timestamp: number;
+  status: 'success' | 'error';
+  trigger: string;
+  files_checked: number;
+  duration_ms: number;
+  error_count: number;
+  diagnostics: string | null;
+}
+
+export interface Message {
+  id: string;
+  ownerType: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  messageType?: string;
+  messageSubType?: string;
+  status?: string;
+}
+
+export interface ErrorReport {
+  success: boolean;
+  message: string;
+  typescript: { status: string; errors: any[] };
+  runtime: { status: string; errors: any[] };
+  transpile: { status: string; errors: any[] };
+}
+
 export class NullshotApiClient {
   private baseUrl: string;
   private sessionToken: string | null;
@@ -260,6 +289,105 @@ export class NullshotApiClient {
     }
 
     return (await response.json()) as SkillsResponse;
+  }
+
+  async getLogs(roomId: string, branch: string = 'main'): Promise<CompilationLog[]> {
+    if (!this.sessionToken) {
+      throw new Error("Not authenticated. Run `nullshot login` first.");
+    }
+
+    const qs = new URLSearchParams({ roomId, branch });
+    const response = await fetch(`${this.baseUrl}/api/jam/cli-logs?${qs}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${this.sessionToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Session expired. Run `nullshot login` to re-authenticate.");
+      }
+      const body = await response.json().catch(() => ({ error: "Unknown error" })) as { error?: string };
+      throw new Error(body.error || `Failed to get logs (${response.status})`);
+    }
+
+    return (await response.json()) as CompilationLog[];
+  }
+
+  async getMessages(roomId: string): Promise<Message[]> {
+    if (!this.sessionToken) {
+      throw new Error("Not authenticated. Run `nullshot login` first.");
+    }
+
+    const qs = new URLSearchParams({ roomId });
+    const response = await fetch(`${this.baseUrl}/api/jam/cli-messages?${qs}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${this.sessionToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Session expired. Run `nullshot login` to re-authenticate.");
+      }
+      const body = await response.json().catch(() => ({ error: "Unknown error" })) as { error?: string };
+      throw new Error(body.error || `Failed to get messages (${response.status})`);
+    }
+
+    return (await response.json()) as Message[];
+  }
+
+  async getRawMessages(roomId: string): Promise<string> {
+    if (!this.sessionToken) {
+      throw new Error("Not authenticated. Run `nullshot login` first.");
+    }
+
+    const qs = new URLSearchParams({ roomId });
+    const response = await fetch(`${this.baseUrl}/api/jam/cli-messages-raw?${qs}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${this.sessionToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Session expired. Run `nullshot login` to re-authenticate.");
+      }
+      const body = await response.text().catch(() => "Unknown error");
+      throw new Error(body || `Failed to get raw messages (${response.status})`);
+    }
+
+    return response.text();
+  }
+
+  async getErrors(roomId: string, branch: string = 'main'): Promise<ErrorReport> {
+    if (!this.sessionToken) {
+      throw new Error("Not authenticated. Run `nullshot login` first.");
+    }
+
+    const qs = new URLSearchParams({ roomId, branch });
+    const response = await fetch(`${this.baseUrl}/api/jam/cli-errors?${qs}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${this.sessionToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Session expired. Run `nullshot login` to re-authenticate.");
+      }
+      const body = await response.json().catch(() => ({ error: "Unknown error" })) as { error?: string };
+      throw new Error(body.error || `Failed to get error report (${response.status})`);
+    }
+
+    return (await response.json()) as ErrorReport;
   }
 
   getWebSocketUrl(path: string): string {

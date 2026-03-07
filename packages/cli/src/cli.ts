@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import * as fs from "node:fs";
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
@@ -1182,6 +1183,223 @@ program
       });
 
       await shutdown("Session ended.");
+    } catch (error) {
+      spinner.stop();
+      if (error instanceof Error) {
+        logger.error(chalk.red(error.message));
+      }
+      process.exit(1);
+    }
+  });
+
+// =============================================
+// Jam inspection commands
+// =============================================
+
+program
+  .command("logs")
+  .description("View compilation logs for a Jam room")
+  .argument("[room-id]", "Room ID to fetch logs for")
+  .option("--branch <branch>", "Branch name", "main")
+  .option("--api-url <url>", "API base URL override")
+  .action(async (roomIdArg?: string, options?: { branch?: string; apiUrl?: string }) => {
+    const creds = AuthManager.getCredentials();
+    if (!creds) {
+      logger.error(chalk.red("Not authenticated. Run `nullshot login` first."));
+      process.exit(1);
+    }
+
+    if (!roomIdArg) {
+      logger.error(chalk.red("Room ID is required. Usage: nullshot logs <room-id>"));
+      process.exit(1);
+    }
+
+    const client = new NullshotApiClient({
+      baseUrl: options?.apiUrl || creds.baseUrl,
+      sessionToken: creds.sessionToken,
+    });
+
+    const spinner = ora("Fetching logs...").start();
+
+    try {
+      const logs = await client.getLogs(roomIdArg, options?.branch || "main");
+      spinner.stop();
+
+      if (logs.length === 0) {
+        logger.info(chalk.yellow("No logs found."));
+        return;
+      }
+
+      const c1 = 26;
+      const c2 = 10;
+      const c3 = 8;
+      const c4 = 8;
+
+      console.log(
+        chalk.dim("Timestamp".padEnd(c1)) +
+        chalk.dim("Status".padEnd(c2)) +
+        chalk.dim("Errors".padEnd(c3)) +
+        chalk.dim("Files".padEnd(c4)) +
+        chalk.dim("Trigger"),
+      );
+      console.log(chalk.dim("─".repeat(c1 + c2 + c3 + c4 + 30)));
+
+      for (const log of logs) {
+        const ts = new Date(log.timestamp).toLocaleString().padEnd(c1);
+        const status = log.status === "success"
+          ? chalk.green("success".padEnd(c2))
+          : chalk.red("error".padEnd(c2));
+        console.log(
+          ts +
+          status +
+          String(log.error_count).padEnd(c3) +
+          String(log.files_checked).padEnd(c4) +
+          log.trigger,
+        );
+      }
+    } catch (error) {
+      spinner.stop();
+      if (error instanceof Error) {
+        logger.error(chalk.red(error.message));
+      }
+      process.exit(1);
+    }
+  });
+
+program
+  .command("messages")
+  .description("View messages for a Jam room")
+  .argument("[room-id]", "Room ID to fetch messages for")
+  .option("--raw", "Fetch raw transcript and save to file")
+  .option("--output <file>", "Output filename for raw transcript")
+  .option("--full", "Show full message content without truncation")
+  .option("--api-url <url>", "API base URL override")
+  .action(async (roomIdArg?: string, options?: { raw?: boolean; output?: string; full?: boolean; apiUrl?: string }) => {
+    const creds = AuthManager.getCredentials();
+    if (!creds) {
+      logger.error(chalk.red("Not authenticated. Run `nullshot login` first."));
+      process.exit(1);
+    }
+
+    if (!roomIdArg) {
+      logger.error(chalk.red("Room ID is required. Usage: nullshot messages <room-id>"));
+      process.exit(1);
+    }
+
+    const client = new NullshotApiClient({
+      baseUrl: options?.apiUrl || creds.baseUrl,
+      sessionToken: creds.sessionToken,
+    });
+
+    const spinner = ora("Fetching messages...").start();
+
+    try {
+      if (options?.raw) {
+        const raw = await client.getRawMessages(roomIdArg);
+        spinner.stop();
+        const filename = options.output || `messages-${roomIdArg}.txt`;
+        fs.writeFileSync(filename, raw, "utf-8");
+        logger.info(chalk.green(`Saved to ${filename}`));
+      } else {
+        const messages = await client.getMessages(roomIdArg);
+        spinner.stop();
+
+        if (messages.length === 0) {
+          logger.info(chalk.yellow("No messages found."));
+          return;
+        }
+
+        for (const msg of messages) {
+          const ts = new Date(msg.timestamp).toLocaleTimeString();
+          const label = msg.ownerType === "user"
+            ? chalk.cyan("USER")
+            : chalk.magenta(`ASSISTANT${msg.messageSubType ? ` (${msg.messageSubType})` : ""}`);
+          const content = options?.full
+            ? msg.content
+            : msg.content.length > 200
+              ? `${msg.content.slice(0, 200)}…`
+              : msg.content;
+          console.log(`${chalk.dim(ts)} ${label}`);
+          console.log(content);
+          console.log();
+        }
+      }
+    } catch (error) {
+      spinner.stop();
+      if (error instanceof Error) {
+        logger.error(chalk.red(error.message));
+      }
+      process.exit(1);
+    }
+  });
+
+program
+  .command("errors")
+  .description("View error report for a Jam room")
+  .argument("[room-id]", "Room ID to fetch errors for")
+  .option("--branch <branch>", "Branch name", "main")
+  .option("--api-url <url>", "API base URL override")
+  .action(async (roomIdArg?: string, options?: { branch?: string; apiUrl?: string }) => {
+    const creds = AuthManager.getCredentials();
+    if (!creds) {
+      logger.error(chalk.red("Not authenticated. Run `nullshot login` first."));
+      process.exit(1);
+    }
+
+    if (!roomIdArg) {
+      logger.error(chalk.red("Room ID is required. Usage: nullshot errors <room-id>"));
+      process.exit(1);
+    }
+
+    const client = new NullshotApiClient({
+      baseUrl: options?.apiUrl || creds.baseUrl,
+      sessionToken: creds.sessionToken,
+    });
+
+    const spinner = ora("Fetching error report...").start();
+
+    try {
+      const report = await client.getErrors(roomIdArg, options?.branch || "main");
+      spinner.stop();
+
+      if (report.success) {
+        console.log(chalk.green(`✓ ${report.message}`));
+        return;
+      }
+
+      console.log(chalk.red(`✗ ${report.message}`));
+      console.log();
+
+      if (report.typescript.errors.length > 0) {
+        console.log(chalk.bold.red("TypeScript Errors:"));
+        for (const err of report.typescript.errors) {
+          const location = [err.file, err.line ? `:${err.line}` : ""].join("");
+          const message = err.message || JSON.stringify(err);
+          console.log(`  ${chalk.dim(location)}  ${message}`);
+        }
+        console.log();
+      }
+
+      if (report.runtime.errors.length > 0) {
+        console.log(chalk.bold.red("Runtime Errors:"));
+        for (const err of report.runtime.errors) {
+          const source = err.source ? chalk.dim(`[${err.source}]`) : "";
+          const count = err.count ? chalk.dim(` ×${err.count}`) : "";
+          const message = err.message || JSON.stringify(err);
+          console.log(`  ${source}${count} ${message}`);
+        }
+        console.log();
+      }
+
+      if (report.transpile.errors.length > 0) {
+        console.log(chalk.bold.red("Transpile Errors:"));
+        for (const err of report.transpile.errors) {
+          const file = err.file ? chalk.dim(err.file) : "";
+          const message = err.message || err.diagnostics || JSON.stringify(err);
+          console.log(`  ${file}  ${message}`);
+        }
+        console.log();
+      }
     } catch (error) {
       spinner.stop();
       if (error instanceof Error) {
