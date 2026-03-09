@@ -17,7 +17,10 @@ import { Logger } from "./utils/logger.js";
 import { TemplateManager } from "./template/template-manager.js";
 import { InputManager } from "./template/input-manager.js";
 import { AuthManager } from "./auth/auth-manager.js";
-import { NullshotApiClient } from "./api/nullshot-api-client.js";
+import {
+  deriveCodeboxHttpBaseUrl,
+  NullshotApiClient,
+} from "./api/nullshot-api-client.js";
 import { SyncEngine } from "./sync/sync-engine.js";
 import { injectSkills } from "./skills/inject-skills.js";
 import type {
@@ -996,6 +999,7 @@ program
     let targetRoomTitle: string | undefined;
     let targetJamId: string | undefined;
     let targetPreviewUrl: string | undefined;
+    let targetBranchName: string | undefined;
 
     try {
       const { jams } = await client.listJams();
@@ -1015,6 +1019,7 @@ program
             targetRoomTitle = room.title;
             targetJamId = jam.id;
             targetPreviewUrl = room.previewUrl;
+            targetBranchName = room.branchName;
             break;
           }
         }
@@ -1087,6 +1092,7 @@ program
           targetRoomId = selectedRoom.id;
           targetRoomTitle = selectedRoom.title;
           targetPreviewUrl = selectedRoom.previewUrl;
+          targetBranchName = selectedRoom.branchName;
           break selectionLoop;
         }
       }
@@ -1139,7 +1145,10 @@ program
       const engine = new SyncEngine({
         localDir,
         codeboxWsUrl,
+        codeboxHttpBaseUrl: deriveCodeboxHttpBaseUrl(client.getBaseUrl()),
         jamWsUrl,
+        roomId: targetRoomId!,
+        branchName: targetBranchName || "main",
         userId: creds.userId,
         userName: creds.userName,
         sessionToken: creds.sessionToken,

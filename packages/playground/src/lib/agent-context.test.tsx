@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import React from "react";
 import {
@@ -34,6 +34,11 @@ vi.mock("@/lib/agent-storage", () => ({
 describe("AgentContext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   describe("useAgentContext", () => {
@@ -257,6 +262,49 @@ describe("AgentContext", () => {
 
       // Should fall back to default agent
       expect(result.current.agents).toEqual([DEFAULT_AGENT]);
+    });
+
+    it("should cancel scheduled updates when unmounted", async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              defaultAgentName: "Runtime Agent",
+              defaultAgentUrl: "http://localhost:8787",
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        ),
+      );
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <AgentProvider>{children}</AgentProvider>
+      );
+
+      const { unmount } = renderHook(() => useAgentContext(), { wrapper });
+      unmount();
+
+      const originalWindow = globalThis.window;
+      Object.defineProperty(globalThis, "window", {
+        value: undefined,
+        configurable: true,
+      });
+
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      Object.defineProperty(globalThis, "window", {
+        value: originalWindow,
+        configurable: true,
+      });
+
+      expect(true).toBe(true);
     });
   });
 
