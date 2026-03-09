@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { vol } from "memfs";
 import { exec } from "child_process";
 import { TemplateManager } from "./template/template-manager.js";
+import { program } from "./cli.js";
 
 vi.mock("fs/promises", () => ({
   ...vi.importActual("memfs"),
@@ -67,5 +68,35 @@ describe("CLI Integration", () => {
     expect(templates.find((t) => t.type === "agent")?.url).toBe(
       "https://github.com/null-shot/typescript-agent-template",
     );
+  });
+
+  it("should expose auth and Jam inspection commands in top-level help", () => {
+    const help = program.helpInformation();
+
+    expect(help).toContain("login [options]");
+    expect(help).toContain("logout");
+    expect(help).toContain("jam [options] [room-id]");
+    expect(help).toContain("logs [options] [room-id]");
+    expect(help).toContain("messages [options] [room-id]");
+    expect(help).toContain("errors [options] [room-id]");
+    expect(help).toContain("View messages for a Jam room");
+  });
+
+  it("should expose message, log, and error command options in help", () => {
+    const messagesCommand = program.commands.find(
+      (command) => command.name() === "messages",
+    );
+    const logsCommand = program.commands.find(
+      (command) => command.name() === "logs",
+    );
+    const errorsCommand = program.commands.find(
+      (command) => command.name() === "errors",
+    );
+
+    expect(messagesCommand?.helpInformation()).toContain("--raw");
+    expect(messagesCommand?.helpInformation()).toContain("--full");
+    expect(messagesCommand?.helpInformation()).toContain("--output <file>");
+    expect(logsCommand?.helpInformation()).toContain("--branch <branch>");
+    expect(errorsCommand?.helpInformation()).toContain("--branch <branch>");
   });
 });

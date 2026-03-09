@@ -68,12 +68,6 @@ nullshot create mcp
 nullshot create agent
 ```
 
-### Initialize MCP configuration in existing project
-
-```bash
-nullshot init
-```
-
 ### Install MCP dependencies
 
 ```bash
@@ -84,6 +78,16 @@ nullshot install
 
 ```bash
 nullshot dev
+```
+
+### Sign in and inspect Jam conversations
+
+```bash
+nullshot login
+nullshot jam
+nullshot messages <room-id> --full
+nullshot logs <room-id>
+nullshot errors <room-id>
 ```
 
 ## 🤖 AI Provider Support

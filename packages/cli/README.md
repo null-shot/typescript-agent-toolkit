@@ -14,6 +14,7 @@ A comprehensive TypeScript CLI for managing Model Context Protocol (MCP) servers
 - ✅ **Schema Validation**: Type-safe configuration with comprehensive validation
 - 📝 **Modern Config**: Support for JSON configuration files
 - 🌍 **Working Directory Support**: `--cwd` option for flexible project management
+- 💬 **Jam Inspection**: Read room messages, logs, and error reports from the CLI
 
 ## 📦 Installation
 
@@ -70,6 +71,23 @@ This will:
 ```bash
 # Run all services in development mode
 nullshot dev
+```
+
+### 4. Sign In And Inspect A Jam
+
+```bash
+# Authenticate with your Nullshot account
+nullshot login
+
+# Sync a Jam room locally
+nullshot jam
+
+# Read the room transcript
+nullshot messages <room-id> --full
+
+# Inspect compilation output and errors
+nullshot logs <room-id>
+nullshot errors <room-id>
 ```
 
 ## 📋 Commands Reference
@@ -139,6 +157,67 @@ nullshot create agent    # Create AI Agent project
 - Project name and directory
 - Template selection
 - Initial configuration
+
+### `nullshot login`
+
+Authenticate with Nullshot and store a local session for Jam commands.
+
+```bash
+nullshot login
+nullshot login --status
+nullshot login --api-url https://nullshot.ai
+```
+
+### `nullshot logout`
+
+Clear stored Nullshot credentials.
+
+```bash
+nullshot logout
+```
+
+### `nullshot jam`
+
+Sync files with a Nullshot Jam room.
+
+```bash
+nullshot jam
+nullshot jam <room-id>
+```
+
+**What it does:**
+
+- Lets you pick a Jam and room interactively, or connect directly by room id
+- Creates a local synced directory for the selected room
+- Keeps files synced in real time while the session is active
+
+### `nullshot logs`
+
+View compilation logs for a Jam room.
+
+```bash
+nullshot logs <room-id>
+nullshot logs <room-id> --branch main
+```
+
+### `nullshot messages`
+
+Read the messages for a Jam room, including full transcripts when needed.
+
+```bash
+nullshot messages <room-id>
+nullshot messages <room-id> --full
+nullshot messages <room-id> --raw --output transcript.txt
+```
+
+### `nullshot errors`
+
+View the aggregated error report for a Jam room.
+
+```bash
+nullshot errors <room-id>
+nullshot errors <room-id> --branch main
+```
 
 ### `nullshot list`
 
@@ -281,6 +360,12 @@ nullshot list --format json
 
 # Run in different directory
 nullshot dev --cwd ./my-project
+
+# Inspect a Jam transcript
+nullshot messages <room-id> --full
+
+# Save the raw transcript to a file
+nullshot messages <room-id> --raw --output transcript.txt
 ```
 
 ### Multi-Service Development
