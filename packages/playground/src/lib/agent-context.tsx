@@ -5,6 +5,7 @@ import React, {
   useContext,
   useReducer,
   useEffect,
+  useRef,
   ReactNode,
 } from "react";
 import { Agent, AgentHealthStatus, DEFAULT_AGENT, getDefaultAgent, loadRuntimeConfig } from "@/lib/config";
@@ -157,14 +158,46 @@ export function AgentProvider({
 }: AgentProviderProps) {
   // Use getDefaultAgent() to read env vars dynamically on mount
   const defaultAgent = React.useMemo(() => getDefaultAgent(), []);
+  const isMountedRef = useRef(false);
+  const timeoutIdsRef = useRef(new Set<ReturnType<typeof setTimeout>>());
+
+  const clearScheduledTimeout = React.useCallback(
+    (timeoutId: ReturnType<typeof setTimeout>) => {
+      clearTimeout(timeoutId);
+      timeoutIdsRef.current.delete(timeoutId);
+    },
+    [],
+  );
+
+  const scheduleTimeout = React.useCallback(
+    (callback: () => void, delay: number) => {
+      const timeoutId = setTimeout(() => {
+        timeoutIdsRef.current.delete(timeoutId);
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        callback();
+      }, delay);
+
+      timeoutIdsRef.current.add(timeoutId);
+      return timeoutId;
+    },
+    [],
+  );
   
   // Load runtime config on mount (client-side only)
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       console.log("[AgentProvider] Loading runtime config...");
       loadRuntimeConfig().then(() => {
+        if (!isMountedRef.current) {
+          return;
+        }
+
         // Small delay to ensure cache is updated
-        setTimeout(() => {
+        scheduleTimeout(() => {
           // Update agent with runtime config
           const updatedAgent = getDefaultAgent();
           console.log("[AgentProvider] Loaded runtime config, updating agent to:", updatedAgent.name, "URL:", updatedAgent.url);
@@ -175,13 +208,27 @@ export function AgentProvider({
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [scheduleTimeout]);
   
   const [state, dispatch] = useReducer(agentReducer, {
     ...initialState,
     agents: initialAgents || [defaultAgent],
     selectedAgentId: initialAgents?.[0]?.id || defaultAgent.id,
   });
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+
+      for (const timeoutId of timeoutIdsRef.current) {
+        clearTimeout(timeoutId);
+      }
+
+      timeoutIdsRef.current.clear();
+    };
+  }, []);
 
   // Create storage instance
   const storage = React.useMemo(() => createAgentStorage(), []);
@@ -200,9 +247,10 @@ export function AgentProvider({
     // Do multiple retries with increasing delays to give agents time to start
     let retryCount = 0;
     const maxRetries = 4; // Try 4 times over ~15 seconds
+    const effectTimeoutIds = new Set<ReturnType<typeof setTimeout>>();
     
     const attemptRefresh = () => {
-      refreshAgents().then(() => {
+      void refreshAgents().then(() => {
         // Check if any agent is still offline
         const hasOfflineAgents = state.agents.some(agent => !agent.health?.isOnline);
         
@@ -211,21 +259,31 @@ export function AgentProvider({
           retryCount++;
           // Exponential backoff: 3s, 5s, 7s, 10s
           const delay = retryCount === 1 ? 3000 : retryCount === 2 ? 5000 : retryCount === 3 ? 7000 : 10000;
-          setTimeout(() => {
+          let retryTimeoutId!: ReturnType<typeof setTimeout>;
+          retryTimeoutId = scheduleTimeout(() => {
+            effectTimeoutIds.delete(retryTimeoutId);
             attemptRefresh();
           }, delay);
+          effectTimeoutIds.add(retryTimeoutId);
         }
       });
     };
     
     // Start checking after initial delay (give agents time to start)
-    const timeoutId = setTimeout(() => {
+    let timeoutId!: ReturnType<typeof setTimeout>;
+    timeoutId = scheduleTimeout(() => {
+      effectTimeoutIds.delete(timeoutId);
       attemptRefresh();
     }, 3000); // 3 second initial delay
+    effectTimeoutIds.add(timeoutId);
     
-    return () => clearTimeout(timeoutId);
+    return () => {
+      for (const effectTimeoutId of effectTimeoutIds) {
+        clearScheduledTimeout(effectTimeoutId);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.agents.length]); // Only depend on agents count to avoid infinite loops
+  }, [clearScheduledTimeout, scheduleTimeout, state.agents.length]); // Only depend on agents count to avoid infinite loops
 
   // Save agents to storage when they change
   useEffect(() => {
@@ -254,16 +312,22 @@ export function AgentProvider({
       if (storedAgents.length > 0) {
         dispatch({ type: "SET_AGENTS", payload: storedAgents });
         // Refresh health after loading from storage
-        setTimeout(() => refreshAgents(), 500);
+        scheduleTimeout(() => {
+          void refreshAgents();
+        }, 500);
       } else {
         // If no stored agents, use DEFAULT_AGENT and refresh its health
-        setTimeout(() => refreshAgents(), 500);
+        scheduleTimeout(() => {
+          void refreshAgents();
+        }, 500);
       }
     } catch (error) {
       console.error("Failed to load agents from storage:", error);
       dispatch({ type: "SET_ERROR", payload: "Failed to load agents" });
       // Still try to refresh default agent
-      setTimeout(() => refreshAgents(), 500);
+      scheduleTimeout(() => {
+        void refreshAgents();
+      }, 500);
     }
   };
 
@@ -346,6 +410,10 @@ export function AgentProvider({
 
   // Refresh all agents (check their health)
   const refreshAgents = async () => {
+    if (!isMountedRef.current) {
+      return;
+    }
+
     dispatch({ type: "SET_LOADING", payload: true });
 
     try {
@@ -383,6 +451,10 @@ export function AgentProvider({
         }),
       );
 
+      if (!isMountedRef.current) {
+        return;
+      }
+
       // Update health and names for all agents
       healthChecks.forEach(({ id, health, name }) => {
         updateAgentHealth(id, health);
@@ -394,7 +466,9 @@ export function AgentProvider({
       // Don't show error on initial startup - agents might still be starting
       console.warn("[AgentProvider] Failed to refresh agent health (agents might be starting):", error);
     } finally {
-      dispatch({ type: "SET_LOADING", payload: false });
+      if (isMountedRef.current) {
+        dispatch({ type: "SET_LOADING", payload: false });
+      }
     }
   };
 
