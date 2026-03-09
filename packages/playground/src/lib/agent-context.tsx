@@ -8,7 +8,7 @@ import React, {
   useRef,
   ReactNode,
 } from "react";
-import { Agent, AgentHealthStatus, DEFAULT_AGENT, getDefaultAgent, loadRuntimeConfig } from "@/lib/config";
+import { Agent, AgentHealthStatus, getDefaultAgent, loadRuntimeConfig } from "@/lib/config";
 import { saveCustomAgent, validateAgentUrl } from "@/lib/agent-storage";
 import { createAgentStorage, setupStorageSync } from "@/lib/agent-persistence";
 
@@ -207,7 +207,6 @@ export function AgentProvider({
         }, 100);
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleTimeout]);
   
   const [state, dispatch] = useReducer(agentReducer, {
@@ -218,15 +217,16 @@ export function AgentProvider({
 
   useEffect(() => {
     isMountedRef.current = true;
+    const timeoutIds = timeoutIdsRef.current;
 
     return () => {
       isMountedRef.current = false;
 
-      for (const timeoutId of timeoutIdsRef.current) {
+      for (const timeoutId of timeoutIds) {
         clearTimeout(timeoutId);
       }
 
-      timeoutIdsRef.current.clear();
+      timeoutIds.clear();
     };
   }, []);
 
@@ -259,8 +259,7 @@ export function AgentProvider({
           retryCount++;
           // Exponential backoff: 3s, 5s, 7s, 10s
           const delay = retryCount === 1 ? 3000 : retryCount === 2 ? 5000 : retryCount === 3 ? 7000 : 10000;
-          let retryTimeoutId!: ReturnType<typeof setTimeout>;
-          retryTimeoutId = scheduleTimeout(() => {
+          const retryTimeoutId = scheduleTimeout(() => {
             effectTimeoutIds.delete(retryTimeoutId);
             attemptRefresh();
           }, delay);
@@ -270,8 +269,7 @@ export function AgentProvider({
     };
     
     // Start checking after initial delay (give agents time to start)
-    let timeoutId!: ReturnType<typeof setTimeout>;
-    timeoutId = scheduleTimeout(() => {
+    const timeoutId = scheduleTimeout(() => {
       effectTimeoutIds.delete(timeoutId);
       attemptRefresh();
     }, 3000); // 3 second initial delay
