@@ -317,12 +317,29 @@ export class NullshotApiClient {
     return Array.isArray(data) ? data : (data.logs ?? []);
   }
 
-  async getMessages(roomId: string): Promise<Message[]> {
+  private async resolveJamIdForRoom(roomId: string): Promise<string> {
+    const { jams } = await this.listJams();
+
+    for (const jam of jams) {
+      if (jam.rooms.some((room) => room.id === roomId)) {
+        return jam.id;
+      }
+    }
+
+    // Fall back to the home-room convention when the room was not found.
+    return roomId;
+  }
+
+  async getMessages(roomId: string, jamId?: string): Promise<Message[]> {
     if (!this.sessionToken) {
       throw new Error("Not authenticated. Run `nullshot login` first.");
     }
 
+    const resolvedJamId = jamId || await this.resolveJamIdForRoom(roomId);
     const qs = new URLSearchParams({ roomId });
+    if (resolvedJamId) {
+      qs.set('jamId', resolvedJamId);
+    }
     const response = await fetch(`${this.baseUrl}/api/jam/cli-messages?${qs}`, {
       method: "GET",
       headers: {
@@ -343,12 +360,16 @@ export class NullshotApiClient {
     return Array.isArray(data) ? data : (data.messages ?? []);
   }
 
-  async getRawMessages(roomId: string): Promise<string> {
+  async getRawMessages(roomId: string, jamId?: string): Promise<string> {
     if (!this.sessionToken) {
       throw new Error("Not authenticated. Run `nullshot login` first.");
     }
 
+    const resolvedJamId = jamId || await this.resolveJamIdForRoom(roomId);
     const qs = new URLSearchParams({ roomId });
+    if (resolvedJamId) {
+      qs.set('jamId', resolvedJamId);
+    }
     const response = await fetch(`${this.baseUrl}/api/jam/cli-messages-raw?${qs}`, {
       method: "GET",
       headers: {
