@@ -14,7 +14,10 @@ import { hashContent, type FileHashMap } from "./content-hash.js";
 export interface SyncOptions {
   localDir: string;
   codeboxWsUrl: string;
+  codeboxHttpBaseUrl: string;
   jamWsUrl: string;
+  roomId: string;
+  branchName: string;
   userId: string;
   userName: string | null;
   sessionToken: string;
@@ -31,10 +34,9 @@ export interface SyncOptions {
   onAfterInitialSync?: (localDir: string) => Promise<string[]>;
 }
 
-interface PendingRequest {
-  resolve: (value: any) => void;
-  reject: (reason: any) => void;
-  timer: ReturnType<typeof setTimeout>;
+interface CodeboxFileEntry {
+  path: string;
+  type: "file" | "directory";
 }
 
 interface PendingFileSyncEvent {
@@ -47,8 +49,6 @@ export class SyncEngine {
   private codeboxWs: WebSocket | null = null;
   private jamWs: WebSocket | null = null;
   private fileWatcher: FileWatcher | null = null;
-  private requestIdCounter = 0;
-  private pendingRequests: Map<string, PendingRequest> = new Map();
   private recentlySentPaths: Map<string, number> = new Map();
   /**
    * Hashes of files written from remote. When chokidar fires a change event
@@ -131,12 +131,6 @@ export class SyncEngine {
       await this.fileWatcher.stop();
       this.fileWatcher = null;
     }
-
-    for (const [, pending] of this.pendingRequests) {
-      clearTimeout(pending.timer);
-      pending.reject(new Error("Sync engine stopped"));
-    }
-    this.pendingRequests.clear();
 
     if (this.codeboxWs) {
       this.codeboxWs.close(1000, "CLI disconnecting");
@@ -281,25 +275,47 @@ export class SyncEngine {
       this.opts.onStatus?.(chalk.dim(`Resuming — ${Object.keys(localHashes).length} local file(s) cached`));
     }
 
-    const response = await this.sendCodeboxRequest("cli:sync_init", {
-      localHashes,
-    });
+    const listing = await this.codeboxJsonRequest<{
+      success: boolean;
+      files?: CodeboxFileEntry[];
+      error?: string;
+    }>("GET", "/files?path=%2F&recursive=true");
 
-    if (!response.success) {
-      throw new Error(`Initial sync failed: ${response.error || "Unknown error"}`);
+    if (!listing.success) {
+      throw new Error(`Initial sync failed: ${listing.error || "Unknown error"}`);
     }
 
-    const files = response.files as Array<{ path: string; content: string }>;
+    const fileEntries = (listing.files ?? []).filter((entry) => entry.type === "file");
     let written = 0;
     let skipped = 0;
+    let unchanged = 0;
 
-    for (const file of files) {
-      if (shouldIgnorePath(file.path, this.projectIgnorePatterns)) {
+    for (const entry of fileEntries) {
+      if (shouldIgnorePath(entry.path, this.projectIgnorePatterns)) {
         skipped++;
         continue;
       }
 
-      const localPath = path.join(this.opts.localDir, file.path);
+      const file = await this.codeboxJsonRequest<{
+        success: boolean;
+        path: string;
+        content?: string;
+        error?: string;
+      }>(
+        "GET",
+        `/file?path=${encodeURIComponent(entry.path)}&raw=true`,
+      );
+
+      if (!file.success || typeof file.content !== "string") {
+        throw new Error(`Failed to read ${entry.path}: ${file.error || "Unknown error"}`);
+      }
+
+      if (localHashes[entry.path] === hashContent(file.content)) {
+        unchanged++;
+        continue;
+      }
+
+      const localPath = path.join(this.opts.localDir, entry.path);
       const dir = path.dirname(localPath);
 
       if (!fs.existsSync(dir)) {
@@ -307,12 +323,11 @@ export class SyncEngine {
       }
 
       // Record the hash so the file watcher knows not to echo this write back
-      this.remoteWrittenHashes.set(file.path, hashContent(file.content));
+      this.remoteWrittenHashes.set(entry.path, hashContent(file.content));
       fs.writeFileSync(localPath, file.content, "utf-8");
       written++;
     }
 
-    const unchanged = response.unchanged as number | undefined;
     const parts: string[] = [`Downloaded ${written} file${written !== 1 ? "s" : ""}`];
     if (unchanged) parts.push(chalk.dim(`${unchanged} unchanged`));
     if (skipped > 0) parts.push(chalk.dim(`${skipped} ignored`));
@@ -349,10 +364,7 @@ export class SyncEngine {
 
           this.recentlySentPaths.set(change.relativePath, Date.now());
           const isNew = change.type === "add";
-          this.sendCodeboxRequest("cli:write_file", {
-            path: change.relativePath,
-            content,
-          }).then(() => {
+          this.writeRemoteFile(change.relativePath, content).then(() => {
             this.queueFileSyncEvent(change.relativePath, isNew ? "created" : "updated");
           }).catch((err) => {
             this.opts.onError?.(new Error(`Failed to sync ${change.relativePath}: ${err.message}`));
@@ -367,9 +379,7 @@ export class SyncEngine {
           }
 
           this.recentlySentPaths.set(change.relativePath, Date.now());
-          this.sendCodeboxRequest("cli:delete_file", {
-            path: change.relativePath,
-          }).then(() => {
+          this.deleteRemoteFile(change.relativePath).then(() => {
             this.queueFileSyncEvent(change.relativePath, "deleted");
           }).catch((err) => {
             this.opts.onError?.(new Error(`Failed to delete ${change.relativePath}: ${err.message}`));
@@ -458,15 +468,6 @@ export class SyncEngine {
   }
 
   private handleCodeboxMessage(msg: Record<string, any>): void {
-    // Handle responses to our requests
-    if (msg.requestId && this.pendingRequests.has(msg.requestId)) {
-      const pending = this.pendingRequests.get(msg.requestId)!;
-      clearTimeout(pending.timer);
-      this.pendingRequests.delete(msg.requestId);
-      pending.resolve(msg);
-      return;
-    }
-
     // Handle file change broadcasts from other sources (agent or web)
     if (msg.type === "file:created" || msg.type === "file:updated") {
       const filePath = msg.path as string;
@@ -502,10 +503,10 @@ export class SyncEngine {
       if (typeof msg.content === "string") {
         writeContent(msg.content);
       } else {
-        this.sendCodeboxRequest("cli:read_file", { path: filePath })
+        this.readRemoteFile(filePath)
           .then((response) => {
             if (response.success && response.content !== undefined) {
-              writeContent(response.content as string);
+              writeContent(response.content);
             }
           })
           .catch(() => {});
@@ -541,28 +542,57 @@ export class SyncEngine {
     }
   }
 
-  private sendCodeboxRequest(type: string, payload: Record<string, any>): Promise<Record<string, any>> {
-    return new Promise((resolve, reject) => {
-      if (!this.codeboxWs || this.codeboxWs.readyState !== WebSocket.OPEN) {
-        reject(new Error("CodeBox WebSocket not connected"));
-        return;
-      }
+  private codeboxEndpoint(pathname: string): string {
+    const branch = encodeURIComponent(this.opts.branchName);
+    return `${this.opts.codeboxHttpBaseUrl}/code/${encodeURIComponent(this.opts.roomId)}/${branch}${pathname}`;
+  }
 
-      const requestId = `req_${++this.requestIdCounter}`;
-      const timer = setTimeout(() => {
-        this.pendingRequests.delete(requestId);
-        reject(new Error(`Request ${type} timed out`));
-      }, 30_000);
+  private async codeboxJsonRequest<T>(method: string, pathname: string, body?: unknown): Promise<T> {
+    const init: RequestInit = {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    };
+    if (body !== undefined) {
+      init.body = JSON.stringify(body);
+    }
 
-      this.pendingRequests.set(requestId, { resolve, reject, timer });
+    const response = await fetch(this.codeboxEndpoint(pathname), init);
 
-      this.codeboxWs.send(
-        JSON.stringify({
-          type,
-          requestId,
-          ...payload,
-        })
-      );
-    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(text || `CodeBox request failed (${response.status})`);
+    }
+
+    return response.json() as Promise<T>;
+  }
+
+  private readRemoteFile(filePath: string): Promise<{ success: boolean; content?: string; error?: string }> {
+    return this.codeboxJsonRequest(
+      "GET",
+      `/file?path=${encodeURIComponent(filePath)}&raw=true`,
+    );
+  }
+
+  private async writeRemoteFile(filePath: string, content: string): Promise<void> {
+    const result = await this.codeboxJsonRequest<{ success: boolean; error?: string }>(
+      "PUT",
+      `/file?path=${encodeURIComponent(filePath)}`,
+      { content },
+    );
+    if (!result.success) {
+      throw new Error(result.error || `Failed to write ${filePath}`);
+    }
+  }
+
+  private async deleteRemoteFile(filePath: string): Promise<void> {
+    const result = await this.codeboxJsonRequest<{ success: boolean; error?: string }>(
+      "DELETE",
+      `/file?path=${encodeURIComponent(filePath)}`,
+    );
+    if (!result.success) {
+      throw new Error(result.error || `Failed to delete ${filePath}`);
+    }
   }
 }

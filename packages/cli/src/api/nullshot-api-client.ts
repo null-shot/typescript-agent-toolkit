@@ -45,6 +45,36 @@ export interface WsUrlParams {
   userName: string;
 }
 
+export function deriveCodeboxHttpBaseUrl(apiUrl: string): string {
+  let host: string;
+  let protocol: string;
+  try {
+    const parsed = new URL(apiUrl);
+    host = parsed.hostname;
+    protocol = parsed.protocol;
+  } catch {
+    return "https://instant.nullshot.dev";
+  }
+
+  if (host === "localhost" || host === "127.0.0.1") {
+    return `${protocol}//${host}:8888`;
+  }
+
+  const prMatch = host.match(
+    /^platform-website-pr-(\d+)\.devaccounts-1password\.workers\.dev$/,
+  );
+  if (prMatch) {
+    const pr = prMatch[1];
+    return `https://playground-pr-${pr}.devaccounts-1password.workers.dev`;
+  }
+
+  if (host === "test.nullshot.ai" || /^dev-.*-test\.xavalabs\.com$/.test(host)) {
+    return "https://test.xavalabs.com";
+  }
+
+  return "https://instant.nullshot.dev";
+}
+
 /**
  * Derive WebSocket URLs directly from the api-url without a server round-trip.
  *

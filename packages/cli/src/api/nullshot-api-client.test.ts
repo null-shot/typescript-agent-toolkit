@@ -1,7 +1,27 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NullshotApiClient } from "./nullshot-api-client.js";
+import {
+	deriveCodeboxHttpBaseUrl,
+	NullshotApiClient,
+} from "./nullshot-api-client.js";
 
 describe("NullshotApiClient", () => {
+	it("should derive direct codebox HTTP hosts for known environments", () => {
+		expect(deriveCodeboxHttpBaseUrl("http://localhost:3000")).toBe(
+			"http://localhost:8888",
+		);
+		expect(
+			deriveCodeboxHttpBaseUrl(
+				"https://platform-website-pr-123.devaccounts-1password.workers.dev",
+			),
+		).toBe("https://playground-pr-123.devaccounts-1password.workers.dev");
+		expect(deriveCodeboxHttpBaseUrl("https://test.nullshot.ai")).toBe(
+			"https://test.xavalabs.com",
+		);
+		expect(deriveCodeboxHttpBaseUrl("https://nullshot.ai")).toBe(
+			"https://instant.nullshot.dev",
+		);
+	});
+
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		vi.restoreAllMocks();
