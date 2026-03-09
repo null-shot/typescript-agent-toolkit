@@ -21,7 +21,6 @@ describe("NullshotApiClient", () => {
 			"https://instant.nullshot.dev",
 		);
 	});
-
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		vi.restoreAllMocks();
