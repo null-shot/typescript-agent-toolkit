@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import * as fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
@@ -26,7 +27,7 @@ import type {
   WranglerConfig,
 } from "./types/index.js";
 
-const program = new Command();
+export const program = new Command();
 const logger = new Logger();
 
 interface GlobalOptions {
@@ -47,6 +48,18 @@ program
     "--cwd <path>",
     "Run as if nullshot was started in the specified directory instead of the current working directory",
   );
+
+program.addHelpText(
+  "after",
+  `
+Examples:
+  $ nullshot login
+  $ nullshot jam
+  $ nullshot messages <room-id> --full
+  $ nullshot logs <room-id>
+  $ nullshot errors <room-id>
+`,
+);
 
 program
   .command("install")
@@ -1414,8 +1427,14 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
-// When run via `pnpm dev:run -- login --token=...`, pnpm injects a leading "--" into argv.
-// Commander treats "--" as "end of options", so the rest is parsed as positional args. Strip it.
-const argv = process.argv.slice(2);
-const filtered = argv[0] === "--" ? argv.slice(1) : argv;
-program.parse([process.argv[0] ?? "", process.argv[1] ?? "", ...filtered]);
+export async function main(argv = process.argv): Promise<void> {
+  // When run via `pnpm dev:run -- login --token=...`, pnpm injects a leading "--" into argv.
+  // Commander treats "--" as "end of options", so the rest is parsed as positional args. Strip it.
+  const filteredArgs = argv.slice(2);
+  const filtered = filteredArgs[0] === "--" ? filteredArgs.slice(1) : filteredArgs;
+  await program.parseAsync([argv[0] ?? "", argv[1] ?? "", ...filtered]);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}
