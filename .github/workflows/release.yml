@@ -69,12 +69,21 @@ jobs:
       - name: Version and Publish
         if: steps.changesets.outputs.has_changesets == 'true'
         run: |
+          PRE_VERSION_HEAD=$(git rev-parse HEAD)
+
           # Apply changesets (update version numbers)
           pnpm changeset version
 
-          # Check if any versions were actually changed
-          if git diff --quiet; then
-            echo "No version changes to commit"
+          POST_VERSION_HEAD=$(git rev-parse HEAD)
+          VERSION_COMMIT_CREATED=false
+          if [ "$PRE_VERSION_HEAD" != "$POST_VERSION_HEAD" ]; then
+            VERSION_COMMIT_CREATED=true
+          fi
+
+          # Check if any versions were actually changed, accounting for
+          # changesets creating an automatic release commit.
+          if [ "$VERSION_COMMIT_CREATED" = "false" ] && git diff --quiet; then
+            echo "No version changes to publish"
             exit 0
           fi
 
@@ -88,11 +97,14 @@ jobs:
           echo "TEST_UTILS_VERSION=${TEST_UTILS_VERSION}" >> $GITHUB_ENV
           echo "AGENT_VERSION=${AGENT_VERSION}" >> $GITHUB_ENV
           echo "CLI_VERSION=${CLI_VERSION}" >> $GITHUB_ENV
-          echo "RELEASE_TAG=v${MCP_VERSION}" >> $GITHUB_ENV
 
-          # Commit the version updates
-          git add .
-          git commit -m "chore(release): version packages"
+          # Commit the version updates when changesets did not already do so.
+          if [ "$VERSION_COMMIT_CREATED" = "false" ]; then
+            git add .
+            git commit -m "chore(release): version packages"
+          else
+            echo "Using changeset-generated release commit"
+          fi
 
           # Build again with updated versions
           pnpm build
@@ -112,8 +124,10 @@ jobs:
             TAG_NAME="v${MCP_VERSION}"
             if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
               echo "Tag $TAG_NAME already exists, skipping tag creation"
+              echo "RELEASE_TAG=" >> $GITHUB_ENV
             else
               git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+              echo "RELEASE_TAG=${TAG_NAME}" >> $GITHUB_ENV
             fi
             git push origin main --tags
           fi
