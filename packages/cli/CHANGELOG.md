@@ -1,5 +1,11 @@
 # @nullshot/cli
 
+## 0.3.2
+
+### Patch Changes
+
+- 62846f5: Fix the npm and npx CLI entrypoint so `nullshot` runs correctly when launched from the published package shims.
+
 ## 0.3.1
 
 ### Patch Changes
