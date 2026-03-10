@@ -1,5 +1,11 @@
 # @nullshot/cli
 
+## 0.3.1
+
+### Patch Changes
+
+- 52e8ba2: Publish the Jam command fixes that restored file sync, room message lookups, and the `logs`, `messages`, and `errors` help surface in the CLI.
+
 ## 0.3.0
 
 ### Minor Changes

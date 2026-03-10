@@ -1,6 +1,6 @@
 {
   "name": "@nullshot/cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "author": "Felix Nordén",
   "description": "CLI tool for managing Model Context Protocol (MCP) servers with Cloudflare Workers and Durable Objects",
