@@ -36,14 +36,14 @@
     "node": ">=22.0.0"
   },
   "bin": {
-    "nullshot": "dist/cli.js"
+    "nullshot": "dist/bin.js"
   },
   "scripts": {
     "build": "tsc",
     "preinstall": "mkdir -p dist",
     "dev": "tsx watch src/cli.ts",
     "dev:run": "tsx src/cli.ts",
-    "start": "node dist/cli.js",
+    "start": "node dist/bin.js",
     "test": "vitest run",
     "test:coverage": "vitest --coverage",
     "test:watch": "vitest --watch",
