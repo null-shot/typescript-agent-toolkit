@@ -1,7 +1,4 @@
-#!/usr/bin/env node
-
 import * as fs from "node:fs";
-import { pathToFileURL } from "node:url";
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
@@ -1442,8 +1439,4 @@ export async function main(argv = process.argv): Promise<void> {
   const filteredArgs = argv.slice(2);
   const filtered = filteredArgs[0] === "--" ? filteredArgs.slice(1) : filteredArgs;
   await program.parseAsync([argv[0] ?? "", argv[1] ?? "", ...filtered]);
-}
-
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await main();
 }
