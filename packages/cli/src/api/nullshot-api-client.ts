@@ -93,7 +93,11 @@ export function deriveCodeboxHttpBaseUrl(apiUrl: string): string {
  *     → wss://test.xavalabs.com/code-ws/...
  *     → wss://jams-test.api.nullshot.ai/jams/.../ws
  *
- *   Everything else (nullshot.ai, …)
+ *   nullshot.ai  (production)
+ *     → wss://instant.nullshot.dev/code-ws/...
+ *     → wss://jams.api.nullshot.ai/jams/.../ws
+ *
+ *   Everything else
  *     → null  (fall back to server-provided URLs via /api/jam/ws-urls)
  */
 export function deriveWsUrls(apiUrl: string, params: WsUrlParams): WsUrlsResponse | null {
@@ -138,7 +142,18 @@ export function deriveWsUrls(apiUrl: string, params: WsUrlParams): WsUrlsRespons
     };
   }
 
-  // Production — use server-provided URLs via /api/jam/ws-urls
+  // Production (nullshot.ai): connect directly to worker services.
+  // The /api/jam/ws-urls server endpoint returns the same URLs, but deriving
+  // them here avoids an extra round-trip.
+  if (host === 'nullshot.ai') {
+    return {
+      codeboxWsUrl: `wss://instant.nullshot.dev/code-ws/${encodedRoom}${baseQuery}`,
+      jamWsUrl: `wss://jams.api.nullshot.ai/jams/${jamId}/ws?roomId=${roomId}&userId=${userId}&source=cli&userName=${encodedUser}`,
+      mode: 'direct',
+    };
+  }
+
+  // Unknown host — fall back to server-provided URLs via /api/jam/ws-urls
   return null;
 }
 
