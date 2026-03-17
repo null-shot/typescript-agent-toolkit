@@ -199,9 +199,52 @@ export interface Message {
 export interface ErrorReport {
   success: boolean;
   message: string;
-  typescript: { status: string; errors: any[] };
-  runtime: { status: string; errors: any[] };
-  transpile: { status: string; errors: any[] };
+  typescript: {
+    status: string;
+    errors: Array<{
+      file?: string;
+      line?: number;
+      column?: number;
+      message?: string;
+      code?: string;
+    }>;
+    filesChecked?: number;
+    errorCount?: number;
+    note?: string;
+    failed_type_packages?: string[];
+  };
+  runtime: {
+    status: string;
+    errors: Array<{
+      message?: string;
+      source?: string;
+      stack?: string;
+      occurrences?: number;
+      count?: number;
+    }>;
+    message?: string;
+    errorCount?: number;
+  };
+  transpile: {
+    status: string;
+    errors: Array<{
+      file?: string;
+      line?: number;
+      column?: number;
+      message?: string;
+      diagnostics?: string;
+    }>;
+    errorCount?: number;
+  };
+  worker_preflight?: {
+    status: string;
+    stage?: string;
+    entryPoint?: string;
+    errorCount?: number;
+    errors?: string[];
+    warnings?: string[];
+  };
+  bundle_warnings?: string[];
 }
 
 export class NullshotApiClient {
