@@ -17,6 +17,7 @@ import { AuthManager } from "./auth/auth-manager.js";
 import {
   deriveCodeboxHttpBaseUrl,
   NullshotApiClient,
+  type ErrorReport,
 } from "./api/nullshot-api-client.js";
 import { SyncEngine } from "./sync/sync-engine.js";
 import { injectSkills } from "./skills/inject-skills.js";
@@ -1352,8 +1353,123 @@ program
     }
   });
 
+function formatStructuredDiagnostic(
+  entry: string | {
+    file?: string;
+    line?: number;
+    column?: number;
+    message?: string;
+    diagnostics?: string;
+  },
+): string {
+  if (typeof entry === "string") {
+    return `  ${entry}`;
+  }
+
+  const location = [
+    entry.file || "unknown",
+    entry.line ? `:${entry.line}` : "",
+    entry.column ? `:${entry.column}` : "",
+  ].join("");
+  const message = entry.message || entry.diagnostics || JSON.stringify(entry);
+  return `  ${chalk.dim(location)}  ${message}`;
+}
+
+function formatInlineLogMessage(message?: string, source?: string, count?: number): string {
+  const sourceText = source ? chalk.dim(`[${source}]`) : "";
+  const countText = count ? chalk.dim(` ×${count}`) : "";
+  return `  ${sourceText}${countText} ${message || "Unknown error"}`.trimEnd();
+}
+
+function printErrorReport(report: ErrorReport): void {
+  if (report.success) {
+    console.log(chalk.green(`✓ ${report.message}`));
+    return;
+  }
+
+  console.log(chalk.red(`✗ ${report.message}`));
+  console.log();
+
+  if (report.typescript.errors.length > 0) {
+    console.log(chalk.bold.red("TypeScript Errors:"));
+    for (const err of report.typescript.errors) {
+      console.log(formatStructuredDiagnostic(err));
+    }
+    console.log();
+  }
+
+  if (report.typescript.note) {
+    console.log(chalk.yellow(report.typescript.note));
+    console.log();
+  }
+
+  if (report.runtime.errors.length > 0) {
+    console.log(chalk.bold.red("Runtime Errors:"));
+    for (const err of report.runtime.errors) {
+      const countValue = err.occurrences ?? err.count;
+      console.log(formatInlineLogMessage(err.message, err.source, countValue));
+    }
+    console.log();
+  }
+
+  if (report.transpile.errors.length > 0) {
+    console.log(chalk.bold.red("Transpile Errors:"));
+    for (const err of report.transpile.errors) {
+      console.log(formatStructuredDiagnostic(err));
+    }
+    console.log();
+  }
+
+  if (report.worker_preflight?.errors?.length) {
+    console.log(chalk.bold.red("Worker Preflight:"));
+    for (const err of report.worker_preflight.errors) {
+      console.log(`  ${err}`);
+    }
+    console.log();
+  }
+
+  if (report.worker_logs?.errors?.length) {
+    console.log(chalk.bold.red("Worker Logs:"));
+    for (const err of report.worker_logs.errors) {
+      console.log(formatInlineLogMessage(err.message, err.source));
+    }
+    if (report.worker_logs.hint) {
+      console.log(chalk.yellow(`  ${report.worker_logs.hint}`));
+    }
+    console.log();
+  }
+
+  if (report.frontend_logs?.errors?.length) {
+    console.log(chalk.bold.red("Frontend Errors:"));
+    for (const err of report.frontend_logs.errors) {
+      console.log(`  ${err.message || "Unknown frontend error"}`);
+    }
+    if (report.frontend_logs.hint) {
+      console.log(chalk.yellow(`  ${report.frontend_logs.hint}`));
+    }
+    console.log();
+  }
+
+  if (report.frontend_logs?.warnings?.length) {
+    console.log(chalk.bold.yellow("Frontend Warnings:"));
+    for (const warning of report.frontend_logs.warnings) {
+      console.log(`  ${warning.message || "Unknown frontend warning"}`);
+    }
+    console.log();
+  }
+
+  if (report.bundle_warnings?.length) {
+    console.log(chalk.bold.yellow("Bundle Warnings:"));
+    for (const warning of report.bundle_warnings) {
+      console.log(`  ${warning}`);
+    }
+    console.log();
+  }
+}
+
 program
   .command("errors")
+  .alias("error-check")
   .description("View error report for a Jam room")
   .argument("[room-id]", "Room ID to fetch errors for")
   .option("--branch <branch>", "Branch name", "main")
@@ -1380,67 +1496,7 @@ program
     try {
       const report = await client.getErrors(roomIdArg, options?.branch || "main");
       spinner.stop();
-
-      if (report.success) {
-        console.log(chalk.green(`✓ ${report.message}`));
-        return;
-      }
-
-      console.log(chalk.red(`✗ ${report.message}`));
-      console.log();
-
-      if (report.typescript.errors.length > 0) {
-        console.log(chalk.bold.red("TypeScript Errors:"));
-        for (const err of report.typescript.errors) {
-          const location = [err.file, err.line ? `:${err.line}` : ""].join("");
-          const message = err.message || JSON.stringify(err);
-          console.log(`  ${chalk.dim(location)}  ${message}`);
-        }
-        console.log();
-      }
-
-      if (report.typescript.note) {
-        console.log(chalk.yellow(report.typescript.note));
-        console.log();
-      }
-
-      if (report.runtime.errors.length > 0) {
-        console.log(chalk.bold.red("Runtime Errors:"));
-        for (const err of report.runtime.errors) {
-          const source = err.source ? chalk.dim(`[${err.source}]`) : "";
-          const countValue = err.occurrences ?? err.count;
-          const count = countValue ? chalk.dim(` ×${countValue}`) : "";
-          const message = err.message || JSON.stringify(err);
-          console.log(`  ${source}${count} ${message}`);
-        }
-        console.log();
-      }
-
-      if (report.transpile.errors.length > 0) {
-        console.log(chalk.bold.red("Transpile Errors:"));
-        for (const err of report.transpile.errors) {
-          const file = err.file ? chalk.dim(err.file) : "";
-          const message = err.message || err.diagnostics || JSON.stringify(err);
-          console.log(`  ${file}  ${message}`);
-        }
-        console.log();
-      }
-
-      if (report.worker_preflight?.errors?.length) {
-        console.log(chalk.bold.red("Worker Preflight:"));
-        for (const err of report.worker_preflight.errors) {
-          console.log(`  ${err}`);
-        }
-        console.log();
-      }
-
-      if (report.bundle_warnings?.length) {
-        console.log(chalk.bold.yellow("Bundle Warnings:"));
-        for (const warning of report.bundle_warnings) {
-          console.log(`  ${warning}`);
-        }
-        console.log();
-      }
+      printErrorReport(report);
     } catch (error) {
       spinner.stop();
       if (error instanceof Error) {
