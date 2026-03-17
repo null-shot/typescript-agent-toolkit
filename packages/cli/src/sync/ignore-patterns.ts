@@ -99,8 +99,9 @@ export const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
   "*.dylib",
   "*.wasm",
 
-  // ── Cloudflare / Worker generated files ───────────────────────────────────
-  "worker-configuration.d.ts",
+  // ── Cloudflare / Worker generated directories ─────────────────────────────
+  // Keep generated type files syncable because preview/typecheck depends on
+  // them being present in both the local workspace and remote CodeBox.
   ".cloudflare",
 
   // ── CLI-injected context (never upload back to remote) ────────────────────

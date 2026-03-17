@@ -1399,11 +1399,17 @@ program
         console.log();
       }
 
+      if (report.typescript.note) {
+        console.log(chalk.yellow(report.typescript.note));
+        console.log();
+      }
+
       if (report.runtime.errors.length > 0) {
         console.log(chalk.bold.red("Runtime Errors:"));
         for (const err of report.runtime.errors) {
           const source = err.source ? chalk.dim(`[${err.source}]`) : "";
-          const count = err.count ? chalk.dim(` ×${err.count}`) : "";
+          const countValue = err.occurrences ?? err.count;
+          const count = countValue ? chalk.dim(` ×${countValue}`) : "";
           const message = err.message || JSON.stringify(err);
           console.log(`  ${source}${count} ${message}`);
         }
@@ -1416,6 +1422,22 @@ program
           const file = err.file ? chalk.dim(err.file) : "";
           const message = err.message || err.diagnostics || JSON.stringify(err);
           console.log(`  ${file}  ${message}`);
+        }
+        console.log();
+      }
+
+      if (report.worker_preflight?.errors?.length) {
+        console.log(chalk.bold.red("Worker Preflight:"));
+        for (const err of report.worker_preflight.errors) {
+          console.log(`  ${err}`);
+        }
+        console.log();
+      }
+
+      if (report.bundle_warnings?.length) {
+        console.log(chalk.bold.yellow("Bundle Warnings:"));
+        for (const warning of report.bundle_warnings) {
+          console.log(`  ${warning}`);
         }
         console.log();
       }

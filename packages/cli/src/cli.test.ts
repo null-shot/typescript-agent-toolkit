@@ -3,6 +3,8 @@ import { vol } from "memfs";
 import { exec } from "child_process";
 import { TemplateManager } from "./template/template-manager.js";
 import { program } from "./cli.js";
+import { AuthManager } from "./auth/auth-manager.js";
+import { NullshotApiClient } from "./api/nullshot-api-client.js";
 
 vi.mock("fs/promises", () => ({
   ...vi.importActual("memfs"),
@@ -98,5 +100,47 @@ describe("CLI Integration", () => {
     expect(messagesCommand?.helpInformation()).toContain("--output <file>");
     expect(logsCommand?.helpInformation()).toContain("--branch <branch>");
     expect(errorsCommand?.helpInformation()).toContain("--branch <branch>");
+  });
+
+  it("formats normalized worker validation output for the errors command", async () => {
+    vi.spyOn(AuthManager, "getCredentials").mockReturnValue({
+      baseUrl: "http://localhost:3000",
+      sessionToken: "session-token",
+      email: "user@example.com",
+      userId: "user-1",
+    });
+    vi.spyOn(NullshotApiClient.prototype, "getErrors").mockResolvedValue({
+      success: false,
+      message: "❌ Found 2 error(s): 1 TypeScript, 0 runtime, 0 transpile, 1 worker preflight",
+      typescript: {
+        status: "fail",
+        errors: [{ file: "src/worker/index.ts", line: 7, column: 2, message: "Bad import", code: "TS2307" }],
+        errorCount: 1,
+        note: "TypeScript transport failed during validation",
+      },
+      runtime: { status: "pass", errors: [], errorCount: 0 },
+      transpile: { status: "pass", errors: [], errorCount: 0 },
+      worker_preflight: {
+        status: "fail",
+        errors: ["Worker loader validation failed"],
+        errorCount: 1,
+      },
+      bundle_warnings: ["Could not resolve internal import __bare:hono/validator"],
+    } as any);
+
+    const logs: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.join(" "));
+    });
+
+    await program.parseAsync(["errors", "room-1"], {
+      from: "user",
+    });
+
+    const output = logs.join("\n");
+    expect(output).toContain("TypeScript Errors:");
+    expect(output).toContain("Worker Preflight:");
+    expect(output).toContain("Bundle Warnings:");
+    expect(output).toContain("Worker loader validation failed");
   });
 });
