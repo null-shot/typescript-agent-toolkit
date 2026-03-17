@@ -201,13 +201,15 @@ export interface ErrorReport {
   message: string;
   typescript: {
     status: string;
-    errors: Array<{
-      file?: string;
-      line?: number;
-      column?: number;
-      message?: string;
-      code?: string;
-    }>;
+    errors: Array<
+      string | {
+        file?: string;
+        line?: number;
+        column?: number;
+        message?: string;
+        code?: string;
+      }
+    >;
     filesChecked?: number;
     errorCount?: number;
     note?: string;
@@ -227,13 +229,15 @@ export interface ErrorReport {
   };
   transpile: {
     status: string;
-    errors: Array<{
-      file?: string;
-      line?: number;
-      column?: number;
-      message?: string;
-      diagnostics?: string;
-    }>;
+    errors: Array<
+      string | {
+        file?: string;
+        line?: number;
+        column?: number;
+        message?: string;
+        diagnostics?: string;
+      }
+    >;
     errorCount?: number;
   };
   worker_preflight?: {
@@ -243,6 +247,36 @@ export interface ErrorReport {
     errorCount?: number;
     errors?: string[];
     warnings?: string[];
+  };
+  worker_logs?: {
+    status?: string;
+    errors?: Array<{
+      level?: string;
+      message?: string;
+      source?: string;
+      timestamp?: string;
+    }>;
+    errorCount?: number;
+    recent_logs?: Array<{
+      level?: string;
+      message?: string;
+      source?: string;
+      timestamp?: string;
+    }>;
+    hint?: string;
+  };
+  frontend_logs?: {
+    errorCount?: number;
+    warningCount?: number;
+    errors?: Array<{
+      message?: string;
+      timestamp?: string;
+    }>;
+    warnings?: Array<{
+      message?: string;
+      timestamp?: string;
+    }>;
+    hint?: string;
   };
   bundle_warnings?: string[];
 }
