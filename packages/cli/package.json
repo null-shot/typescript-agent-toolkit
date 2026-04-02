@@ -41,8 +41,8 @@
   "scripts": {
     "build": "tsc",
     "preinstall": "mkdir -p dist",
-    "dev": "tsx watch src/cli.ts",
-    "dev:run": "tsx src/cli.ts",
+    "dev": "tsx watch src/bin.ts",
+    "dev:run": "tsx src/bin.ts",
     "start": "node dist/bin.js",
     "test": "vitest run",
     "test:coverage": "vitest --coverage",
