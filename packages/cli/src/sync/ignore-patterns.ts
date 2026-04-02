@@ -100,7 +100,6 @@ export const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
   "*.wasm",
 
   // ── Cloudflare / Worker generated files ───────────────────────────────────
-  "worker-configuration.d.ts",
   ".cloudflare",
 
   // ── CLI-injected context (never upload back to remote) ────────────────────
