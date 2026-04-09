@@ -13,7 +13,12 @@ import { CLIError } from "./utils/errors.js";
 import { Logger } from "./utils/logger.js";
 import { TemplateManager } from "./template/template-manager.js";
 import { InputManager } from "./template/input-manager.js";
-import { AuthManager } from "./auth/auth-manager.js";
+import {
+  AuthManager,
+  DEFAULT_API_URL,
+  normalizeApiUrl,
+  type AuthCredentials,
+} from "./auth/auth-manager.js";
 import {
   deriveCodeboxHttpBaseUrl,
   NullshotApiClient,
@@ -30,6 +35,20 @@ import type {
 
 export const program = new Command();
 const logger = new Logger();
+
+function requireCredentialsForApiUrl(apiUrl: string | undefined): AuthCredentials {
+  const target = normalizeApiUrl(apiUrl ?? DEFAULT_API_URL);
+  const creds = AuthManager.getCredentials(target);
+  if (!creds) {
+    const hint =
+      target === normalizeApiUrl(DEFAULT_API_URL)
+        ? "`nullshot login`"
+        : `\`nullshot login --api-url ${target}\``;
+    logger.error(chalk.red(`Not authenticated for ${target}. Run ${hint} first.`));
+    process.exit(1);
+  }
+  return creds;
+}
 
 interface GlobalOptions {
   dryRun?: boolean;
@@ -826,19 +845,28 @@ program
   .option("--api-url <url>", "API base URL override (default: https://nullshot.ai)")
   .action(async (options: { status?: boolean; apiUrl?: string }) => {
     if (options.status) {
-      const creds = AuthManager.getCredentials();
-      if (creds) {
-        logger.info(chalk.green("✅ Authenticated"));
+      const all = AuthManager.getAllCredentials();
+      if (all.length === 0) {
+        logger.info(chalk.yellow("Not authenticated. Run `nullshot login` to authenticate."));
+        return;
+      }
+      logger.info(chalk.green("Saved logins:"));
+      logger.info("");
+      const defaultKey = normalizeApiUrl(DEFAULT_API_URL);
+      for (const creds of all) {
+        const key = normalizeApiUrl(creds.baseUrl);
+        const label =
+          key === defaultKey ? chalk.cyan(`${creds.baseUrl} (default)`) : chalk.cyan(creds.baseUrl);
+        logger.info(label);
         logger.info(`  User: ${creds.userName || creds.userId}`);
         logger.info(`  Email: ${creds.email || "N/A"}`);
         logger.info(`  Expires: ${new Date(creds.expiresAt).toLocaleDateString()}`);
-      } else {
-        logger.info(chalk.yellow("Not authenticated. Run `nullshot login` to authenticate."));
+        logger.info("");
       }
       return;
     }
 
-    const apiBase = options.apiUrl || "https://nullshot.ai";
+    const apiBase = options.apiUrl || DEFAULT_API_URL;
 
     const { createServer } = await import("node:http");
     const { exec } = await import("node:child_process");
@@ -955,7 +983,7 @@ program
       server.on("error", reject);
     });
 
-    const creds = AuthManager.getCredentials();
+    const creds = AuthManager.getCredentials(apiBase);
     spinner.succeed(
       chalk.green(`Authenticated as ${creds?.userName || creds?.email || creds?.userId || "unknown"}`),
     );
@@ -963,10 +991,22 @@ program
 
 program
   .command("logout")
-  .description("Clear stored Nullshot credentials")
-  .action(() => {
+  .description("Clear stored Nullshot credentials (all environments, or one with --api-url)")
+  .option("--api-url <url>", "Only log out this API base URL")
+  .action((options: { apiUrl?: string }) => {
+    if (options.apiUrl) {
+      const key = normalizeApiUrl(options.apiUrl);
+      const before = AuthManager.getCredentials(key);
+      AuthManager.clearCredentials(key);
+      if (!before) {
+        logger.info(chalk.yellow(`No saved login for ${key}.`));
+        return;
+      }
+      logger.info(chalk.green(`Logged out from ${key}.`));
+      return;
+    }
     AuthManager.clearCredentials();
-    logger.info(chalk.green("Logged out successfully."));
+    logger.info(chalk.green("Logged out from all environments."));
   });
 
 // =============================================
@@ -979,14 +1019,10 @@ program
   .argument("[room-id]", "Room ID to sync with directly")
   .option("--api-url <url>", "API base URL override")
   .action(async (roomIdArg?: string, options?: { apiUrl?: string }) => {
-    const creds = AuthManager.getCredentials();
-    if (!creds) {
-      logger.error(chalk.red("Not authenticated. Run `nullshot login` first."));
-      process.exit(1);
-    }
+    const creds = requireCredentialsForApiUrl(options?.apiUrl);
 
     const client = new NullshotApiClient({
-      baseUrl: options?.apiUrl || creds.baseUrl,
+      baseUrl: creds.baseUrl,
       sessionToken: creds.sessionToken,
     });
 
@@ -1223,11 +1259,7 @@ program
   .option("--branch <branch>", "Branch name", "main")
   .option("--api-url <url>", "API base URL override")
   .action(async (roomIdArg?: string, options?: { branch?: string; apiUrl?: string }) => {
-    const creds = AuthManager.getCredentials();
-    if (!creds) {
-      logger.error(chalk.red("Not authenticated. Run `nullshot login` first."));
-      process.exit(1);
-    }
+    const creds = requireCredentialsForApiUrl(options?.apiUrl);
 
     if (!roomIdArg) {
       logger.error(chalk.red("Room ID is required. Usage: nullshot logs <room-id>"));
@@ -1235,7 +1267,7 @@ program
     }
 
     const client = new NullshotApiClient({
-      baseUrl: options?.apiUrl || creds.baseUrl,
+      baseUrl: creds.baseUrl,
       sessionToken: creds.sessionToken,
     });
 
@@ -1295,11 +1327,7 @@ program
   .option("--full", "Show full message content without truncation")
   .option("--api-url <url>", "API base URL override")
   .action(async (roomIdArg?: string, options?: { raw?: boolean; output?: string; full?: boolean; apiUrl?: string }) => {
-    const creds = AuthManager.getCredentials();
-    if (!creds) {
-      logger.error(chalk.red("Not authenticated. Run `nullshot login` first."));
-      process.exit(1);
-    }
+    const creds = requireCredentialsForApiUrl(options?.apiUrl);
 
     if (!roomIdArg) {
       logger.error(chalk.red("Room ID is required. Usage: nullshot messages <room-id>"));
@@ -1307,7 +1335,7 @@ program
     }
 
     const client = new NullshotApiClient({
-      baseUrl: options?.apiUrl || creds.baseUrl,
+      baseUrl: creds.baseUrl,
       sessionToken: creds.sessionToken,
     });
 
@@ -1475,11 +1503,7 @@ program
   .option("--branch <branch>", "Branch name", "main")
   .option("--api-url <url>", "API base URL override")
   .action(async (roomIdArg?: string, options?: { branch?: string; apiUrl?: string }) => {
-    const creds = AuthManager.getCredentials();
-    if (!creds) {
-      logger.error(chalk.red("Not authenticated. Run `nullshot login` first."));
-      process.exit(1);
-    }
+    const creds = requireCredentialsForApiUrl(options?.apiUrl);
 
     if (!roomIdArg) {
       logger.error(chalk.red("Room ID is required. Usage: nullshot errors <room-id>"));
@@ -1487,7 +1511,7 @@ program
     }
 
     const client = new NullshotApiClient({
-      baseUrl: options?.apiUrl || creds.baseUrl,
+      baseUrl: creds.baseUrl,
       sessionToken: creds.sessionToken,
     });
 

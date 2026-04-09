@@ -3,7 +3,7 @@ import { vol } from "memfs";
 import { exec } from "child_process";
 import { TemplateManager } from "./template/template-manager.js";
 import { program } from "./cli.js";
-import { AuthManager } from "./auth/auth-manager.js";
+import { AuthManager, DEFAULT_API_URL } from "./auth/auth-manager.js";
 import { NullshotApiClient } from "./api/nullshot-api-client.js";
 
 vi.mock("fs/promises", () => ({
@@ -103,12 +103,79 @@ describe("CLI Integration", () => {
     expect(program.helpInformation()).toContain("error-check");
   });
 
+  it("exposes logout --api-url in help", () => {
+    const logoutCommand = program.commands.find((command) => command.name() === "logout");
+    expect(logoutCommand?.helpInformation()).toContain("--api-url");
+  });
+
+  it("login --status prints all saved environments", async () => {
+    vi.spyOn(AuthManager, "getAllCredentials").mockReturnValue([
+      {
+        sessionToken: "a",
+        userId: "u1",
+        userName: "Prod",
+        email: "p@x.com",
+        expiresAt: Date.now() + 86400_000,
+        baseUrl: DEFAULT_API_URL,
+      },
+      {
+        sessionToken: "b",
+        userId: "u2",
+        userName: "Dev",
+        email: "d@x.com",
+        expiresAt: Date.now() + 86400_000,
+        baseUrl: "http://localhost:3000",
+      },
+    ]);
+
+    const logs: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.join(" "));
+    });
+
+    await program.parseAsync(["login", "--status"], { from: "user" });
+
+    const output = logs.join("\n");
+    expect(output).toContain("Saved logins");
+    expect(output).toContain("https://nullshot.ai");
+    expect(output).toContain("(default)");
+    expect(output).toContain("http://localhost:3000");
+  });
+
+  it("errors exits when not authenticated for requested --api-url", async () => {
+    vi.spyOn(AuthManager, "getCredentials").mockImplementation((url?: string) => {
+      if (url?.includes("9999")) return null;
+      return {
+        baseUrl: DEFAULT_API_URL,
+        sessionToken: "session-token",
+        email: "user@example.com",
+        userId: "user-1",
+        userName: null,
+        expiresAt: Date.now() + 86400_000,
+      };
+    });
+
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`EXIT:${code}`);
+    }) as never);
+
+    await expect(
+      program.parseAsync(["errors", "room-1", "--api-url", "http://localhost:9999"], {
+        from: "user",
+      }),
+    ).rejects.toThrow("EXIT:1");
+
+    exitSpy.mockRestore();
+  });
+
   it("formats normalized worker validation output for the errors command", async () => {
     vi.spyOn(AuthManager, "getCredentials").mockReturnValue({
       baseUrl: "http://localhost:3000",
       sessionToken: "session-token",
       email: "user@example.com",
       userId: "user-1",
+      userName: null,
+      expiresAt: Date.now() + 86400_000,
     });
     vi.spyOn(NullshotApiClient.prototype, "getErrors").mockResolvedValue({
       success: false,
