@@ -52,19 +52,16 @@ jobs:
           # Count changeset files excluding README.md
           CHANGESET_COUNT=$(find .changeset -name "*.md" -not -name "README.md" | wc -l)
           if [ "$CHANGESET_COUNT" -gt 0 ]; then
-            echo "has_changesets=true" >> $GITHUB_OUTPUT
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
             echo "Changesets found ($CHANGESET_COUNT files), proceeding with release"
             # List the changeset files for debugging
-            find .changeset -name "*.md" -not -name "README.md" | while read file; do
+            find .changeset -name "*.md" -not -name "README.md" | while read -r file; do
               echo "Found changeset: $file"
             done
           else
-            echo "has_changesets=false" >> $GITHUB_OUTPUT  
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
             echo "No changesets found, skipping release"
           fi
-
-      - name: Upgrade npm
-        run: npm install -g npm@latest
 
       - name: Version and Publish
         if: steps.changesets.outputs.has_changesets == 'true'
@@ -93,10 +90,12 @@ jobs:
           AGENT_VERSION=$(node -p "require('./packages/agent/package.json').version")
           CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
 
-          echo "MCP_VERSION=${MCP_VERSION}" >> $GITHUB_ENV
-          echo "TEST_UTILS_VERSION=${TEST_UTILS_VERSION}" >> $GITHUB_ENV
-          echo "AGENT_VERSION=${AGENT_VERSION}" >> $GITHUB_ENV
-          echo "CLI_VERSION=${CLI_VERSION}" >> $GITHUB_ENV
+          {
+            echo "MCP_VERSION=${MCP_VERSION}"
+            echo "TEST_UTILS_VERSION=${TEST_UTILS_VERSION}"
+            echo "AGENT_VERSION=${AGENT_VERSION}"
+            echo "CLI_VERSION=${CLI_VERSION}"
+          } >> "$GITHUB_ENV"
 
           # Commit the version updates when changesets did not already do so.
           if [ "$VERSION_COMMIT_CREATED" = "false" ]; then
@@ -114,7 +113,7 @@ jobs:
             # Pack each package to validate contents without publishing
             for pkg in packages/mcp packages/cli packages/agent packages/test-utils; do
               echo "Packing $pkg..."
-              (cd $pkg && npm pack --dry-run)
+              (cd "$pkg" && npm pack --dry-run)
             done
           else
             # Publish packages with provenance attestation
@@ -124,10 +123,10 @@ jobs:
             TAG_NAME="v${MCP_VERSION}"
             if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
               echo "Tag $TAG_NAME already exists, skipping tag creation"
-              echo "RELEASE_TAG=" >> $GITHUB_ENV
+              echo "RELEASE_TAG=" >> "$GITHUB_ENV"
             else
               git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
-              echo "RELEASE_TAG=${TAG_NAME}" >> $GITHUB_ENV
+              echo "RELEASE_TAG=${TAG_NAME}" >> "$GITHUB_ENV"
             fi
             git push origin main --tags
           fi
