@@ -26,6 +26,12 @@ import {
 } from "./api/nullshot-api-client.js";
 import { SyncEngine } from "./sync/sync-engine.js";
 import { injectSkills } from "./skills/inject-skills.js";
+import { buildSecretCommand } from "./commands/secret.js";
+import { buildDatabaseCommand } from "./commands/database.js";
+import { buildStorageCommand } from "./commands/storage.js";
+import { buildKvCommand } from "./commands/kv.js";
+import { buildMigrateDataCommand } from "./commands/migrateData.js";
+import { buildDoctorCommand } from "./commands/doctor.js";
 import type {
   MCPConfig,
   InstallOptions,
@@ -1502,7 +1508,17 @@ program
   .argument("[room-id]", "Room ID to fetch errors for")
   .option("--branch <branch>", "Branch name", "main")
   .option("--api-url <url>", "API base URL override")
-  .action(async (roomIdArg?: string, options?: { branch?: string; apiUrl?: string }) => {
+  .option("--diagnose", "Print the full ErrorReport JSON instead of pretty output")
+  .action(async (
+    roomIdArg?: string,
+    options?: { branch?: string; apiUrl?: string; diagnose?: boolean },
+  ) => {
+    const { verbose } = program.opts<GlobalOptions>();
+    if (options?.diagnose && verbose) {
+      logger.error(chalk.red("--diagnose and --verbose are mutually exclusive."));
+      process.exit(1);
+    }
+
     const creds = requireCredentialsForApiUrl(options?.apiUrl);
 
     if (!roomIdArg) {
@@ -1520,7 +1536,11 @@ program
     try {
       const report = await client.getErrors(roomIdArg, options?.branch || "main");
       spinner.stop();
-      printErrorReport(report);
+      if (options?.diagnose) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        printErrorReport(report);
+      }
     } catch (error) {
       spinner.stop();
       if (error instanceof Error) {
@@ -1529,6 +1549,16 @@ program
       process.exit(1);
     }
   });
+
+// =============================================
+// Resource commands (secrets, database, storage, kv, migrate-data, doctor)
+// =============================================
+program.addCommand(buildSecretCommand());
+program.addCommand(buildDatabaseCommand());
+program.addCommand(buildStorageCommand());
+program.addCommand(buildKvCommand());
+program.addCommand(buildMigrateDataCommand());
+program.addCommand(buildDoctorCommand());
 
 process.on("uncaughtException", (error) => {
   logger.error(`${chalk.red("Uncaught exception:")}, ${error}`);

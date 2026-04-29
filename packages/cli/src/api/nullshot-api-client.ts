@@ -543,4 +543,335 @@ export class NullshotApiClient {
   getBaseUrl(): string {
     return this.baseUrl;
   }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Generic typed JSON helper for resource endpoints.
+  // ────────────────────────────────────────────────────────────────────────
+  private async request<T>(
+    method: string,
+    path: string,
+    options?: {
+      body?: unknown;
+      query?: Record<string, string | number | undefined>;
+      raw?: boolean;
+    },
+  ): Promise<T> {
+    if (!this.sessionToken) {
+      throw new Error("Not authenticated. Run `nullshot login` first.");
+    }
+
+    let url = `${this.baseUrl}${path}`;
+    if (options?.query) {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(options.query)) {
+        if (v === undefined) continue;
+        qs.set(k, String(v));
+      }
+      const s = qs.toString();
+      if (s) url += `?${s}`;
+    }
+
+    const init: RequestInit = {
+      method,
+      headers: {
+        Authorization: `Bearer ${this.sessionToken}`,
+        "Content-Type": "application/json",
+      },
+    };
+    if (options?.body !== undefined) {
+      init.body = JSON.stringify(options.body);
+    }
+
+    const response = await fetch(url, init);
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Session expired. Run `nullshot login` to re-authenticate.");
+      }
+      const text = await response.text().catch(() => "");
+      let msg: string | undefined;
+      try {
+        const parsed = JSON.parse(text) as { error?: string; message?: string };
+        msg = parsed.error || parsed.message;
+      } catch {
+        msg = text || undefined;
+      }
+      throw new Error(msg || `${method} ${path} failed (${response.status})`);
+    }
+
+    if (options?.raw) {
+      return response as unknown as T;
+    }
+
+    return (await response.json()) as T;
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Secrets
+  // ────────────────────────────────────────────────────────────────────────
+  async putSecret(roomId: string, key: string, value: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>(
+      "PUT",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/secrets/${encodeURIComponent(key)}`,
+      { body: { value } },
+    );
+  }
+
+  async listSecrets(roomId: string): Promise<{ keys: string[] }> {
+    return this.request<{ keys: string[] }>(
+      "GET",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/secrets`,
+    );
+  }
+
+  async deleteSecret(roomId: string, key: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>(
+      "DELETE",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/secrets/${encodeURIComponent(key)}`,
+    );
+  }
+
+  async bulkPutSecrets(
+    roomId: string,
+    entries: Array<{ key: string; value: string }>,
+  ): Promise<{ ok: true; count: number }> {
+    return this.request<{ ok: true; count: number }>(
+      "POST",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/secrets/bulk`,
+      { body: { entries } },
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Database
+  // ────────────────────────────────────────────────────────────────────────
+  async createDatabase(
+    roomId: string,
+    binding: string,
+    databaseName: string,
+  ): Promise<{ database_id: string }> {
+    return this.request<{ database_id: string }>(
+      "POST",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/database`,
+      { body: { binding, database_name: databaseName } },
+    );
+  }
+
+  async listDatabases(roomId: string): Promise<{
+    databases: Array<{ binding: string; database_id: string; database_name: string }>;
+  }> {
+    return this.request(
+      "GET",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/database`,
+    );
+  }
+
+  async migrateDatabase(
+    roomId: string,
+    binding: string,
+    migrations: Array<{ name: string; sql: string }>,
+  ): Promise<{ applied: string[]; skipped: string[] }> {
+    return this.request(
+      "POST",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/database/${encodeURIComponent(binding)}/migrate`,
+      { body: { migrations } },
+    );
+  }
+
+  async queryDatabase(
+    roomId: string,
+    binding: string,
+    sql: string,
+    params?: unknown[],
+  ): Promise<{
+    results: unknown[];
+    meta: { rowsRead: number; rowsWritten: number };
+  }> {
+    return this.request(
+      "POST",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/database/${encodeURIComponent(binding)}/query`,
+      { body: params ? { sql, params } : { sql } },
+    );
+  }
+
+  async dumpDatabase(roomId: string, binding: string): Promise<Response> {
+    return this.request<Response>(
+      "GET",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/database/${encodeURIComponent(binding)}/dump`,
+      { raw: true },
+    );
+  }
+
+  async restoreDatabase(
+    roomId: string,
+    binding: string,
+    sql: string,
+  ): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>(
+      "POST",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/database/${encodeURIComponent(binding)}/restore`,
+      { body: { sql } },
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Storage (R2)
+  // ────────────────────────────────────────────────────────────────────────
+  async signStoragePut(
+    roomId: string,
+    binding: string,
+    key: string,
+    contentType: string,
+    contentLength: number,
+  ): Promise<{ url: string; headers?: Record<string, string> }> {
+    return this.request(
+      "POST",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/storage/${encodeURIComponent(binding)}/sign-put`,
+      { body: { key, contentType, contentLength } },
+    );
+  }
+
+  async signStorageGet(
+    roomId: string,
+    binding: string,
+    key: string,
+  ): Promise<{ url: string }> {
+    return this.request(
+      "POST",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/storage/${encodeURIComponent(binding)}/sign-get`,
+      { body: { key } },
+    );
+  }
+
+  async listStorage(
+    roomId: string,
+    binding: string,
+    options?: { prefix?: string; cursor?: string; limit?: number },
+  ): Promise<{
+    objects: Array<{ key: string; size: number; etag: string; uploaded: string }>;
+    cursor?: string;
+  }> {
+    return this.request(
+      "GET",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/storage/${encodeURIComponent(binding)}`,
+      {
+        query: {
+          prefix: options?.prefix,
+          cursor: options?.cursor,
+          limit: options?.limit,
+        },
+      },
+    );
+  }
+
+  async deleteStorage(
+    roomId: string,
+    binding: string,
+    key: string,
+  ): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>(
+      "DELETE",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/storage/${encodeURIComponent(binding)}/${encodeURIComponent(key)}`,
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // KV
+  // ────────────────────────────────────────────────────────────────────────
+  async listKvKeys(
+    roomId: string,
+    binding: string,
+    options?: { prefix?: string; cursor?: string; limit?: number },
+  ): Promise<{
+    keys: Array<{ name: string; expiration?: number; metadata?: unknown }>;
+    cursor?: string;
+  }> {
+    return this.request(
+      "GET",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/kv/${encodeURIComponent(binding)}`,
+      {
+        query: {
+          prefix: options?.prefix,
+          cursor: options?.cursor,
+          limit: options?.limit,
+        },
+      },
+    );
+  }
+
+  async getKvValue(
+    roomId: string,
+    binding: string,
+    key: string,
+  ): Promise<{ contentType: string; body: string }> {
+    if (!this.sessionToken) {
+      throw new Error("Not authenticated. Run `nullshot login` first.");
+    }
+    const url = `${this.baseUrl}/api/jam/cli/${encodeURIComponent(roomId)}/kv/${encodeURIComponent(binding)}/${encodeURIComponent(key)}`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.sessionToken}` },
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Session expired. Run `nullshot login` to re-authenticate.");
+      }
+      const t = await response.text().catch(() => "");
+      throw new Error(t || `Failed to fetch KV key (${response.status})`);
+    }
+    const contentType = response.headers.get("content-type") ?? "text/plain";
+    const body = await response.text();
+    return { contentType, body };
+  }
+
+  async putKvValue(
+    roomId: string,
+    binding: string,
+    key: string,
+    value: string,
+    options?: {
+      expiration?: number;
+      expirationTtl?: number;
+      metadata?: unknown;
+    },
+  ): Promise<{ ok: true }> {
+    const body: Record<string, unknown> = { value };
+    if (options?.expiration !== undefined) body.expiration = options.expiration;
+    if (options?.expirationTtl !== undefined)
+      body.expirationTtl = options.expirationTtl;
+    if (options?.metadata !== undefined) body.metadata = options.metadata;
+
+    return this.request<{ ok: true }>(
+      "PUT",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/kv/${encodeURIComponent(binding)}/${encodeURIComponent(key)}`,
+      { body },
+    );
+  }
+
+  async deleteKvValue(
+    roomId: string,
+    binding: string,
+    key: string,
+  ): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>(
+      "DELETE",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/kv/${encodeURIComponent(binding)}/${encodeURIComponent(key)}`,
+    );
+  }
+
+  async bulkPutKv(
+    roomId: string,
+    binding: string,
+    entries: Array<{
+      key: string;
+      value: string;
+      expirationTtl?: number;
+      metadata?: unknown;
+    }>,
+  ): Promise<{ count: number }> {
+    return this.request<{ count: number }>(
+      "POST",
+      `/api/jam/cli/${encodeURIComponent(roomId)}/kv/${encodeURIComponent(binding)}/bulk`,
+      { body: entries },
+    );
+  }
 }

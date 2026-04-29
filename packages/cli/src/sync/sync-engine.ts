@@ -11,6 +11,35 @@ import {
 } from "./ignore-patterns.js";
 import { hashContent, type FileHashMap } from "./content-hash.js";
 
+/**
+ * The codebox stores each synced file as a single SQLite cell in a
+ * Cloudflare Durable Object, which has a hard 1 MiB row size limit
+ * (and a 10 GB total database size limit). Sync attempts that exceed
+ * this raise a SQLITE_TOOBIG error and surface to the user as a blank
+ * preview / handlePreview crash. We refuse oversized files at the CLI
+ * level so the failure happens locally with a clear message instead of
+ * remotely with a stack trace.
+ *
+ * 950 KiB leaves headroom for the JSON envelope the PUT body wraps
+ * around the file content.
+ */
+export const MAX_SYNCED_FILE_BYTES = 950 * 1024;
+
+function isFileTooLarge(absPath: string): { tooBig: boolean; size: number } {
+  try {
+    const { size } = fs.statSync(absPath);
+    return { tooBig: size > MAX_SYNCED_FILE_BYTES, size };
+  } catch {
+    return { tooBig: false, size: 0 };
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
+}
+
 export interface SyncOptions {
   localDir: string;
   codeboxWsUrl: string;
@@ -250,6 +279,16 @@ export class SyncEngine {
         if (entry.isDirectory()) {
           walk(abs);
         } else if (entry.isFile()) {
+          const { tooBig, size } = isFileTooLarge(abs);
+          if (tooBig) {
+            this.opts.onStatus?.(
+              chalk.yellow(
+                `⚠ skipping ${rel} (${formatBytes(size)} > ${formatBytes(MAX_SYNCED_FILE_BYTES)} cell limit). ` +
+                `Add it to .nullshotignore or split the file.`
+              )
+            );
+            continue;
+          }
           try {
             const content = fs.readFileSync(abs, "utf-8");
             hashes[rel] = hashContent(content);
@@ -346,6 +385,16 @@ export class SyncEngine {
         }
 
         if (change.type === "add" || change.type === "change") {
+          const { tooBig, size } = isFileTooLarge(change.absolutePath);
+          if (tooBig) {
+            this.opts.onStatus?.(
+              chalk.yellow(
+                `⚠ skipping ${change.relativePath} (${formatBytes(size)} > ${formatBytes(MAX_SYNCED_FILE_BYTES)} cell limit). ` +
+                `Add it to .nullshotignore or split the file.`
+              )
+            );
+            return;
+          }
           const content = fs.readFileSync(change.absolutePath, "utf-8");
 
           // If this file was just written from remote and the content hasn't
@@ -561,8 +610,17 @@ export class SyncEngine {
     const response = await fetch(this.codeboxEndpoint(pathname), init);
 
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new Error(text || `CodeBox request failed (${response.status})`);
+      const status = response.status;
+      const body = (await response.text().catch(() => "")).trim();
+      const truncated = body.length > 1000 ? `${body.slice(0, 1000)}…` : body;
+      const category =
+        status >= 500
+          ? `Platform error (HTTP ${status}) — retry, and if it persists report it to Nullshot support.`
+          : status >= 400
+            ? `Request rejected (HTTP ${status}) — check your input or auth and try again.`
+            : `CodeBox request failed (HTTP ${status})`;
+      const detail = truncated ? `\nResponse body: ${truncated}` : "";
+      throw new Error(`${method} ${pathname} → ${category}${detail}`);
     }
 
     return response.json() as Promise<T>;
@@ -576,6 +634,14 @@ export class SyncEngine {
   }
 
   private async writeRemoteFile(filePath: string, content: string): Promise<void> {
+    // Last-line defense — defends against any caller that bypassed the
+    // walker / watcher size checks. Mirrors the codebox SQLite cell limit.
+    const byteLength = Buffer.byteLength(content, "utf-8");
+    if (byteLength > MAX_SYNCED_FILE_BYTES) {
+      throw new Error(
+        `Refusing to upload ${filePath}: ${formatBytes(byteLength)} exceeds the ${formatBytes(MAX_SYNCED_FILE_BYTES)} per-file limit (codebox SQLite cell cap is 1 MiB).`
+      );
+    }
     const result = await this.codeboxJsonRequest<{ success: boolean; error?: string }>(
       "PUT",
       `/file?path=${encodeURIComponent(filePath)}`,
