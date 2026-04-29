@@ -16,6 +16,17 @@ describe("shouldIgnorePath", () => {
 		expect(shouldIgnorePath("/apps/demo/worker-configuration.d.ts")).toBe(false)
 	})
 
+	it("force-includes generated env type files even when gitignored", () => {
+		// .gitignore commonly excludes these — the CLI must still sync them so
+		// the remote CodeBox has the Env types available for typecheck.
+		expect(
+			shouldIgnorePath("/worker-configuration.d.ts", ["worker-configuration.d.ts"]),
+		).toBe(false)
+		expect(
+			shouldIgnorePath("/cloudflare-env.d.ts", ["cloudflare-env.d.ts", "*.d.ts"]),
+		).toBe(false)
+	})
+
 	it("still respects project-specific ignore patterns", () => {
 		expect(shouldIgnorePath("/internal-docs/spec.md", ["/internal-docs"])).toBe(true)
 		expect(shouldIgnorePath("/src/index.ts", ["/internal-docs"])).toBe(false)

@@ -110,6 +110,22 @@ export const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
 ];
 
 /**
+ * Files that MUST be synced even when a project's `.gitignore` (or
+ * `.nullshotignore`) excludes them.
+ *
+ * Cloudflare's generated env type files (`worker-configuration.d.ts` /
+ * `cloudflare-env.d.ts`) are typically gitignored because they're produced
+ * by `wrangler types`. But the remote CodeBox needs them present to typecheck
+ * the user's worker code — without them, every `Env` reference becomes a TS
+ * error and the playground appears broken. We therefore force-include them
+ * regardless of the project's ignore configuration.
+ */
+export const ALWAYS_INCLUDE_PATHS: readonly string[] = [
+  "worker-configuration.d.ts",
+  "cloudflare-env.d.ts",
+];
+
+/**
  * The filename that can be placed in the project root to customise ignore
  * patterns. Follows the same format as .gitignore.
  */
@@ -189,6 +205,17 @@ export function shouldIgnorePath(
   // Normalise: strip leading slash, split into segments
   const normalised = filePath.replace(/^\/+/, "");
   const segments = normalised.split("/");
+
+  // Override: certain generated type files must always be synced even when the
+  // project's .gitignore excludes them — see ALWAYS_INCLUDE_PATHS for the why.
+  for (const forced of ALWAYS_INCLUDE_PATHS) {
+    if (
+      normalised === forced ||
+      segments[segments.length - 1] === forced
+    ) {
+      return false;
+    }
+  }
 
   for (const pattern of allPatterns) {
     // Strip leading slash from pattern (absolute patterns treated as relative)
