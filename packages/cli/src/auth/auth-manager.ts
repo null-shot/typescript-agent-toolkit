@@ -41,8 +41,43 @@ export function normalizeApiUrl(url: string): string {
 	}
 }
 
+function decodeJwtExpiresAt(token: string): number | null {
+	const payload = token.split(".")[1]
+	if (!payload) return null
+
+	try {
+		const normalized = payload.replace(/-/g, "+").replace(/_/g, "/")
+		const paddingLength = (4 - (normalized.length % 4)) % 4
+		const padded = normalized.padEnd(normalized.length + paddingLength, "=")
+		const parsed = JSON.parse(Buffer.from(padded, "base64").toString("utf-8")) as unknown
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null
+
+		const exp = (parsed as Record<string, unknown>).exp
+		return typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : null
+	} catch {
+		return null
+	}
+}
+
+function effectiveExpiresAt(creds: AuthCredentials): number {
+	const jwtExpiresAt = decodeJwtExpiresAt(creds.sessionToken)
+	if (jwtExpiresAt !== null) {
+		return creds.expiresAt ? Math.min(creds.expiresAt, jwtExpiresAt) : jwtExpiresAt
+	}
+	return creds.expiresAt
+}
+
 function isExpired(creds: AuthCredentials): boolean {
-	return Boolean(creds.expiresAt && creds.expiresAt < Date.now())
+	const expiresAt = effectiveExpiresAt(creds)
+	return Boolean(expiresAt && expiresAt < Date.now())
+}
+
+function normalizeCredentials(creds: AuthCredentials): AuthCredentials {
+	return {
+		...creds,
+		baseUrl: normalizeApiUrl(creds.baseUrl),
+		expiresAt: effectiveExpiresAt(creds),
+	}
 }
 
 function isLegacyV1Shape(parsed: unknown): parsed is AuthCredentials {
@@ -105,7 +140,7 @@ function dropExpiredEntries(map: Record<string, AuthCredentials>): Record<string
 	const next: Record<string, AuthCredentials> = {}
 	for (const [key, creds] of Object.entries(map)) {
 		if (!isExpired(creds)) {
-			next[key] = { ...creds, baseUrl: normalizeApiUrl(creds.baseUrl) }
+			next[key] = normalizeCredentials(creds)
 		}
 	}
 	return next
@@ -146,7 +181,7 @@ export class AuthManager {
 
 	static saveCredentials(creds: AuthCredentials): void {
 		const key = normalizeApiUrl(creds.baseUrl)
-		const normalized: AuthCredentials = { ...creds, baseUrl: key }
+		const normalized = normalizeCredentials({ ...creds, baseUrl: key })
 		const { credentialsByUrl } = parseStoredCredentials(readRawFile())
 		let merged = dropExpiredEntries(credentialsByUrl)
 		merged[key] = normalized
