@@ -21,6 +21,11 @@ function sampleCreds(overrides: Partial<AuthCredentials> = {}): AuthCredentials 
   };
 }
 
+function jwtWithExp(exp: number): string {
+  const payload = Buffer.from(JSON.stringify({ exp })).toString("base64url");
+  return `header.${payload}.signature`;
+}
+
 describe("normalizeApiUrl", () => {
   it("strips trailing slashes and matches DEFAULT", () => {
     expect(normalizeApiUrl("https://nullshot.ai/")).toBe(DEFAULT_API_URL);
@@ -100,6 +105,18 @@ describe("AuthManager", () => {
 
     expect(AuthManager.getCredentials("http://old.local")).toBeNull();
     expect(AuthManager.getCredentials(DEFAULT_API_URL)?.sessionToken).toBe("ok");
+  });
+
+  it("treats an expired JWT session token as expired", () => {
+    AuthManager.saveCredentials(
+      sampleCreds({
+        baseUrl: "https://test.nullshot.ai",
+        sessionToken: jwtWithExp(Math.floor(Date.now() / 1000) - 60),
+        expiresAt: Date.now() + 86400_000,
+      }),
+    );
+
+    expect(AuthManager.getCredentials("https://test.nullshot.ai")).toBeNull();
   });
 
   it("clearCredentials removes entire file when clearing all", () => {

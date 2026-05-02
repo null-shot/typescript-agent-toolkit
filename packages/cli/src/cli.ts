@@ -42,14 +42,18 @@ import type {
 export const program = new Command();
 const logger = new Logger();
 
+function loginCommandForApiUrl(apiUrl: string | undefined): string {
+  const target = normalizeApiUrl(apiUrl ?? DEFAULT_API_URL);
+  return target === normalizeApiUrl(DEFAULT_API_URL)
+    ? "`nullshot login`"
+    : `\`nullshot login --api-url ${target}\``;
+}
+
 function requireCredentialsForApiUrl(apiUrl: string | undefined): AuthCredentials {
   const target = normalizeApiUrl(apiUrl ?? DEFAULT_API_URL);
   const creds = AuthManager.getCredentials(target);
   if (!creds) {
-    const hint =
-      target === normalizeApiUrl(DEFAULT_API_URL)
-        ? "`nullshot login`"
-        : `\`nullshot login --api-url ${target}\``;
+    const hint = loginCommandForApiUrl(target);
     logger.error(chalk.red(`Not authenticated for ${target}. Run ${hint} first.`));
     process.exit(1);
   }
@@ -1046,7 +1050,11 @@ program
       spinner.stop();
 
       if (jams.length === 0) {
-        logger.info(chalk.yellow("No Jams found. Create one at nullshot.ai first."));
+        logger.info(
+          chalk.yellow(
+            `No Jams found for the saved login at ${creds.baseUrl}. If this token expired or no longer has access, run ${loginCommandForApiUrl(creds.baseUrl)} and try again.`,
+          ),
+        );
         return;
       }
 
@@ -1064,7 +1072,11 @@ program
           }
         }
         if (!targetJamName) {
-          logger.error(chalk.red(`Room ${targetRoomId} not found or you don't have access.`));
+          logger.error(
+            chalk.red(
+              `Room ${targetRoomId} not found, or the saved login does not have access. If this token expired or no longer works, run ${loginCommandForApiUrl(creds.baseUrl)} and try again.`,
+            ),
+          );
           process.exit(1);
         }
       } else {
